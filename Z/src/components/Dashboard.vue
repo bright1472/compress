@@ -2,7 +2,9 @@
 import { ref, computed, onUnmounted, watch } from 'vue';
 import { EngineRouter } from '../engine/engine-router';
 import ComparisonSlider from './ComparisonSlider.vue';
+import LoggerConsole from './LoggerConsole.vue';
 import { t, currentLocale, setLocale } from '../locales/i18n';
+import { logger } from '../engine/logger';
 
 // ── Theme (持久化) ────────────────────────────────────────────────
 const THEME_KEY = 'titan-theme';
@@ -200,6 +202,12 @@ const downloadItem = (item: QueueItem) => {
 
 const downloadAll = () => queue.value.filter(i => i.status === 'done').forEach(downloadItem);
 
+const showLogger = ref(false);
+const openDiagnosticLogs = () => {
+  logger.info('system', 'User opened diagnostic console');
+  showLogger.value = true;
+};
+
 onUnmounted(() => { router.terminate(); });
 </script>
 
@@ -242,6 +250,10 @@ onUnmounted(() => { router.terminate(); });
       </div>
 
       <div class="header-right">
+        <button class="theme-switch log-btn" @click="openDiagnosticLogs" title="View Diagnostic Logs">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 2v14m0 0l-4-4m4 4l4-4M4 22h16" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          <span class="ts-label" style="margin-left: 4px;">Log</span>
+        </button>
         <span class="header-badge">WebCodecs</span>
         <span class="header-badge accent-badge">10GB+</span>
 
@@ -500,6 +512,9 @@ onUnmounted(() => { router.terminate(); });
 
       </main>
     </div>
+
+    <!-- ═══ LOGGER CONSOLE ═════════════════════════════════════ -->
+    <LoggerConsole :show="showLogger" @close="showLogger = false" />
   </div>
 </template>
 

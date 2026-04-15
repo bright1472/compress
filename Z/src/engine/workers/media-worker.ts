@@ -11,9 +11,11 @@ import { Muxer, StreamTarget } from 'mp4-muxer';
 if (typeof (self as any).window === 'undefined') (self as any).window = self;
 
 self.addEventListener('error', (e) => {
+  e.preventDefault();
   postMessage({ type: 'ERROR', data: `[Runtime] ${e.message} @ ${e.filename}:${e.lineno}` });
 });
 self.addEventListener('unhandledrejection', (e) => {
+  e.preventDefault();
   postMessage({ type: 'ERROR', data: `[Promise] ${e.reason}` });
 });
 
