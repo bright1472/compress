@@ -66,10 +66,11 @@ export class MediaEngine {
           }
         };
 
-        this.worker.onerror = (err) => {
+        this.worker.onerror = (err: any) => {
           clearTimeout(initTimeout);
-          console.error('🚨 [Processor] Worker Crash:', err);
-          reject(new Error('后台处理线程崩溃，请检查浏览器 WebCodecs 支持'));
+          const realError = err && err.message ? err.message : '后台处理线程彻底崩溃 (Fatal Error)';
+          console.error('🚨 [Processor] Worker Crash:', realError, err);
+          reject(new Error(`Worker Crash: ${realError}`));
         };
 
         // 握手

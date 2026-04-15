@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, nextTick } from 'vue';
+import { ref, onMounted, watch, nextTick } from 'vue';
 import { logger } from '../engine/logger';
 import { t } from '../locales/i18n';
 
@@ -18,15 +18,14 @@ const updateLogs = () => {
   });
 };
 
-let intervalId: any;
-
-onMounted(() => {
-  updateLogs();
-  intervalId = setInterval(updateLogs, 1000);
+watch(() => props.show, (isOpen) => {
+  if (isOpen) {
+    updateLogs();
+  }
 });
 
-onUnmounted(() => {
-  clearInterval(intervalId);
+onMounted(() => {
+  if (props.show) updateLogs();
 });
 
 const copyLog = (log: any) => {
@@ -43,9 +42,14 @@ const copyLog = (log: any) => {
       <div class="logger-header">
         <div class="logger-title">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 17l6-6-6-6m8 14h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Diagnostic Console
+          Diagnostic Console <span class="paused-badge">(Paused)</span>
         </div>
-        <button class="logger-close" @click="emit('close')">✕</button>
+        <div class="logger-actions">
+          <button class="logger-btn refresh-btn" @click="updateLogs" title="Fetch latest logs">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+          <button class="logger-btn logger-close" @click="emit('close')">✕</button>
+        </div>
       </div>
       <div class="logger-body" ref="terminalRef">
         <div v-if="logs.length === 0" class="log-empty">No logs yet...</div>
@@ -65,8 +69,10 @@ const copyLog = (log: any) => {
 .logger-modal { width: 100%; max-width: 800px; height: 60vh; max-height: 600px; display: flex; flex-direction: column; background: #1e1e1e; border: 1px solid #333; border-radius: 8px; box-shadow: 0 10px 40px rgba(0,0,0,0.5); overflow: hidden; font-family: 'JetBrains Mono', monospace; }
 .logger-header { display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; background: #252526; border-bottom: 1px solid #333; }
 .logger-title { display: flex; align-items: center; gap: 8px; color: #ccc; font-size: 0.8rem; font-weight: 600; }
-.logger-close { background: none; border: none; color: #888; cursor: pointer; padding: 4px; border-radius: 4px; }
-.logger-close:hover { background: #333; color: #fff; }
+.paused-badge { font-size: 0.6rem; background: #884400; color: #ffcc00; padding: 2px 6px; border-radius: 4px; font-weight: bold; }
+.logger-actions { display: flex; align-items: center; gap: 8px; }
+.logger-btn { background: none; border: none; color: #888; cursor: pointer; padding: 4px; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
+.logger-btn:hover { background: #333; color: #fff; }
 .logger-body { flex: 1; overflow-y: auto; padding: 10px; background: #1e1e1e; font-size: 0.75rem; color: #ccc; scrollbar-width: thin; scrollbar-color: #444 transparent; }
 .log-row { display: flex; align-items: flex-start; gap: 8px; padding: 4px 6px; border-radius: 4px; cursor: pointer; transition: background 0.1s; position: relative; }
 .log-row:hover { background: rgba(255,255,255,0.05); }

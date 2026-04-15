@@ -4,7 +4,6 @@
  * 修复：Muxer 0x0 尺寸 / OPFS 降级静默失败 / 背压控制
  */
 
-import MP4Box from 'mp4box';
 import { Muxer, StreamTarget } from 'mp4-muxer';
 
 // ── Worker 环境补丁 ────────────────────────────────────────────────
@@ -67,7 +66,9 @@ async function runPipeline({ file, config, outputHandle }: any) {
     throw new Error(`OPFS 写入句柄创建失败: ${ioErr.message}. 请确保浏览器支持 OPFS.`);
   }
 
-  // B. 解封装（MP4Box）
+  // B. 解封装（MP4Box 动态引入，防止静态提升导致的 ReferenceError）
+  const MP4BoxModule = await import('mp4box');
+  const MP4Box = MP4BoxModule.default || MP4BoxModule;
   const mp4box = MP4Box.createFile();
 
   // 使用 Promise 驱动，确保 onReady 与后续流程串行
@@ -104,7 +105,39 @@ async function runPipeline({ file, config, outputHandle }: any) {
   const width = track.video.width;
   const height = track.video.height;
 
-  // 创建 Muxer（使用正确的宽高）
+  // 硬件编码器对奇数分辨率极度敏感，强制转偶数
+  const safeWidth = width % 2 === 0 ? width : width - 1;
+  const safeHeight = height % 2 === 0 ? height : height - 1;
+
+  let encCodecStr = 'avc1.4D002A'; // H.264 Main Profile (兼容性最好)
+  let muxerCodec: 'avc' | 'hevc' | 'av1' | 'vp9' = 'avc';
+  if (config.codec === 'libx265') {
+    encCodecStr = 'hev1.1.6.L120.90'; // HEVC Main10
+    muxerCodec = 'hevc';
+  } else if (config.codec === 'av1') {
+    encCodecStr = 'av01.0.04M.08';
+    muxerCodec = 'av1';
+  }
+
+  const encConfig: VideoEncoderConfig = {
+    codec: encCodecStr,
+    width: safeWidth,
+    height: safeHeight,
+    bitrate: config.bitrate || 2_000_000,
+    hardwareAcceleration: 'prefer-hardware',
+  };
+
+  // 🔥 核心重构：调用硬件前，先让浏览器探针验证显卡驱动是否支持该配置！
+  try {
+    const support = await VideoEncoder.isConfigSupported(encConfig);
+    if (!support.supported) {
+      throw new Error(`当前浏览器/显卡不支持此硬件编码器配置: ${encCodecStr}`);
+    }
+  } catch (supportErr: any) {
+    throw new Error(`硬件探针探测失败: ${supportErr.message}`);
+  }
+
+  // 创建 Muxer（使用对齐后的安全宽高）
   muxer = new Muxer({
     target: new StreamTarget({
       onData: (data, offset) => {
@@ -112,9 +145,9 @@ async function runPipeline({ file, config, outputHandle }: any) {
       }
     }),
     video: {
-      codec: config.codec === 'libx265' ? 'hevc' : 'avc',
-      width,
-      height,
+      codec: muxerCodec,
+      width: safeWidth,
+      height: safeHeight,
     }
   });
 
@@ -136,13 +169,7 @@ async function runPipeline({ file, config, outputHandle }: any) {
       error: (e) => postMessage({ type: 'ERROR', data: `Encoder: ${e.message}` })
     });
 
-    encoder.configure({
-      codec: config.codec === 'libx265' ? 'hev1.1.6.L120.90' : 'avc1.42E01E',
-      width,
-      height,
-      bitrate: config.bitrate || 2_000_000,
-      hardwareAcceleration: 'prefer-hardware',
-    });
+    encoder.configure(encConfig);
 
     decoder = new VideoDecoder({
       output: (frame) => {
