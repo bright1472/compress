@@ -4,47 +4,44 @@ import { storage } from './storage-service';
 
 export class MediaEngine {
   private worker: Worker | null = null;
+  private abortController: AbortController | null = null;
 
   /**
-   * 处理大规模视频文件
-   * 基于 First-Principles 设计，支持 10GB+ 文件的流式处理
+   * 处理大规模视频文件（WebCodecs 管线）
+   * 注意：当前 Dashboard 默认使用 FfmpegEngine 进行压缩
+   * 此类保留用于未来 WebCodecs 流式处理 10GB+ 文件
    */
   async processLargeVideo(
-    file: File, 
-    config: { codec: string; bitrate?: number; crf?: number; preset?: string }, 
+    file: File,
+    config: { codec: string; bitrate?: number; crf?: number; preset?: string },
     onProgress: (data: { loaded: number; total: number; progress: number }) => void
   ): Promise<File> {
-    
-    // 1. 预检与资源初始化
-    console.group('📁 [Processor] Initialization');
+
+    console.group('📁 [Processor] Init');
     try {
       await storage.init();
-      // 在 OPFS 预留输出文件位 (无内存占用)
       const outputHandle = await storage.createDiskStream(`titan_opt_${Date.now()}.mp4`);
-      console.log('✅ OPFS Storage Ready');
+      console.log('✅ OPFS Ready');
       console.groupEnd();
 
-      // 2. 启动 Worker 线程 (内联模式，消除网络加载不确定性)
       this.worker = new MediaWorker();
+      this.abortController = new AbortController();
 
       return new Promise((resolve, reject) => {
-        if (!this.worker) return reject(new Error('Worker initialization failed internally.'));
+        if (!this.worker) return reject(new Error('Worker 初始化失败'));
 
-        // 设置安全超时：如果 3 秒内 Worker 没响应 PING，说明加载失败
         const initTimeout = setTimeout(() => {
-          reject(new Error('Worker Initialization Timeout. Possible network or proxy block.'));
+          reject(new Error('Worker 初始化超时，可能被网络代理阻断'));
           this.stop();
-        }, 3000);
+        }, 5000);
 
         this.worker.onmessage = async (e: MessageEvent) => {
           const { type, data } = e.data;
 
           switch (type) {
             case 'PONG':
-              console.log('✅ [Processor] Worker Handshake Successful.');
               clearTimeout(initTimeout);
-              // 握手成功后再发送大数据包
-              console.info('📡 [Processor] Dispatching START_PROCESS command...');
+              console.log('✅ [Processor] Worker Handshake OK');
               this.worker!.postMessage({
                 type: 'START_PROCESS',
                 data: { file, config, outputHandle }
@@ -54,45 +51,49 @@ export class MediaEngine {
               onProgress(data);
               break;
             case 'DONE':
-              console.log('🎉 [Processor] Optimization Successfully Completed.');
-              // 从磁盘提取最终成品
+              console.log('🎉 [Processor] Complete');
               try {
                 const finalFile = await (outputHandle as any).getFile();
                 resolve(finalFile);
-              } catch (resErr) {
-                reject(new Error(`Failed to retrieve file from OPFS: ${resErr}`));
+              } catch (err) {
+                reject(new Error(`OPFS 文件读取失败: ${err}`));
               }
               break;
             case 'ERROR':
-              console.error('🔥 [Processor] Worker Pipe Burst:', data);
+              console.error('🔥 [Processor] Worker Error:', data);
               reject(new Error(data));
               break;
           }
         };
 
         this.worker.onerror = (err) => {
-          console.error('🚨 [Processor] Worker Thread Crash:', err);
-          reject(new Error('Background processing thread crashed unexpectedly.'));
+          clearTimeout(initTimeout);
+          console.error('🚨 [Processor] Worker Crash:', err);
+          reject(new Error('后台处理线程崩溃，请检查浏览器 WebCodecs 支持'));
         };
 
-        // 3. 核心：链路握手探测
-        console.info('📡 [Processor] Pinging Worker to verify liveness...');
+        // 握手
         this.worker.postMessage({ type: 'PING' });
       });
 
-    } catch (headErr: any) {
-      console.error('🚫 [Processor] Pipeline Pre-flight Failure:', headErr);
-      throw headErr;
+    } catch (err: any) {
+      console.error('🚫 [Processor] Pre-flight Failure:', err);
+      console.groupEnd();
+      throw err;
     }
   }
 
   /**
-   * 强制终止处理任务
+   * 安全终止：先通知 Worker 清理资源，再 terminate
    */
   stop() {
-    console.warn('🛑 [Processor] Terminating current optimization task.');
-    this.worker?.postMessage({ type: 'STOP' });
-    this.worker?.terminate();
+    if (!this.worker) return;
+    // 通知 worker 优雅清理
+    try { this.worker.postMessage({ type: 'STOP' }); } catch {}
+    // 给 Worker 200ms 完成 cleanup，然后强制终止
+    const w = this.worker;
+    setTimeout(() => { try { w.terminate(); } catch {} }, 200);
     this.worker = null;
+    this.abortController = null;
   }
 }
