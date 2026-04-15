@@ -148,7 +148,8 @@ async function runPipeline({ file, config, outputHandle }: any) {
       codec: muxerCodec,
       width: safeWidth,
       height: safeHeight,
-    }
+    },
+    fastStart: false
   });
 
   // 编码完成计数器
@@ -161,10 +162,19 @@ async function runPipeline({ file, config, outputHandle }: any) {
 
     encoder = new VideoEncoder({
       output: (chunk, metadata) => {
-        muxer?.addVideoChunk(chunk, metadata);
-        encodedFrames++;
-        // 编码阶段进度（50% ~ 100%）
-        postMessage({ type: 'PROGRESS', data: { loaded: bytesLoaded, total: totalSize, progress: 50 + (encodedFrames / Math.max(1, encodedFrames + (encoder?.encodeQueueSize ?? 0))) * 50 } });
+        try {
+          let safeMetadata = metadata;
+          if (metadata && (metadata.decoderConfig === null || (metadata as any).decoderConfig === undefined)) {
+            // Fix null decoderConfig crashes in mp4-muxer
+            safeMetadata = { ...metadata };
+            delete safeMetadata.decoderConfig;
+          }
+          muxer?.addVideoChunk(chunk, safeMetadata);
+          encodedFrames++;
+          postMessage({ type: 'PROGRESS', data: { loaded: bytesLoaded, total: totalSize, progress: 50 + (encodedFrames / Math.max(1, encodedFrames + (encoder?.encodeQueueSize ?? 0))) * 50 } });
+        } catch (e: any) {
+          postMessage({ type: 'ERROR', data: `Muxer Chunk Error: ${e.message}` });
+        }
       },
       error: (e) => postMessage({ type: 'ERROR', data: `Encoder: ${e.message}` })
     });
@@ -173,11 +183,16 @@ async function runPipeline({ file, config, outputHandle }: any) {
 
     decoder = new VideoDecoder({
       output: (frame) => {
-        // 背压控制：如果编码队列过大则等待
-        if (encoder && encoder.encodeQueueSize < 30) {
-          encoder.encode(frame, { keyFrame: encodedFrames % 60 === 0 });
+        try {
+          // 背压控制：如果编码队列过大则等待
+          if (encoder && encoder.encodeQueueSize < 30) {
+            encoder.encode(frame, { keyFrame: encodedFrames % 60 === 0 });
+          }
+        } catch (e: any) {
+          postMessage({ type: 'ERROR', data: `Encoder.encode Error: ${e.message}` });
+        } finally {
+          frame.close();
         }
-        frame.close();
       },
       error: (e) => postMessage({ type: 'ERROR', data: `Decoder: ${e.message}` })
     });
