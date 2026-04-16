@@ -154,6 +154,7 @@ async function runPipeline({ file, config, outputHandle }: any) {
   }
 
   // 🔑 智能 bitrate 计算
+  // 注意：即使 config.bitrate 存在，也要检查是否合理（不升级低码率视频）
   const calculatedBitrate = calculateSmartBitrate(width, height, totalSize, totalFrames, config.bitrate);
   console.log(`🔧 [Worker] Smart bitrate: ${Math.round(calculatedBitrate / 1000)}kbps (${(calculatedBitrate / 1000000).toFixed(2)}Mbps)`);
 
@@ -264,7 +265,7 @@ async function runPipeline({ file, config, outputHandle }: any) {
  * 1. 基于分辨率计算基准 bitrate（参考 Netflix/YouTube 推荐值）
  * 2. 估算原视频 bitrate（文件大小 / 时长）
  * 3. 取两者之间的较低值，避免"低码率视频被重新编码成高码率"
- * 4. 应用用户指定的压缩比例或 bitrate
+ * 4. 🔑 关键修复：即使用户指定了 bitrate，也要检查是否合理，取用户值和智能值的较小者
  */
 function calculateSmartBitrate(
   width: number,
@@ -298,26 +299,35 @@ function calculateSmartBitrate(
   // 🔑 关键：不升级低码率视频
   // 如果原视频 bitrate 低于推荐值，使用原视频的 80%（允许一定压缩空间）
   // 如果原视频 bitrate 高于推荐值，使用推荐值
-  let targetBitrate: number;
+  let smartBitrate: number;
   if (originalBitrate < recommendedBitrate) {
-    targetBitrate = originalBitrate * 0.8; // 原视频的 80%
+    smartBitrate = originalBitrate * 0.8; // 原视频的 80%
     console.log(`🔍 [Worker] Original bitrate (${(originalBitrate / 1000000).toFixed(2)}Mbps) < recommended (${(recommendedBitrate / 1000000).toFixed(2)}Mbps), using 80% of original`);
   } else {
-    targetBitrate = recommendedBitrate;
+    smartBitrate = recommendedBitrate;
     console.log(`🔍 [Worker] Original bitrate (${(originalBitrate / 1000000).toFixed(2)}Mbps) > recommended (${(recommendedBitrate / 1000000).toFixed(2)}Mbps), using recommended`);
-  }
-
-  // 应用用户指定的 bitrate（如果有）
-  if (userBitrate) {
-    console.log(`🔍 [Worker] User specified bitrate: ${(userBitrate / 1000000).toFixed(2)}Mbps`);
-    return userBitrate;
   }
 
   // 设置最小 bitrate（避免过低导致质量崩溃）
   const minBitrate = 500_000; // 500 kbps
-  targetBitrate = Math.max(targetBitrate, minBitrate);
+  smartBitrate = Math.max(smartBitrate, minBitrate);
 
-  return Math.round(targetBitrate);
+  // 🔑 关键修复：即使用户指定了 bitrate，也要检查是否合理
+  // 如果用户指定的 bitrate 会导致文件变大（大于原视频 bitrate），则使用智能计算的值
+  if (userBitrate) {
+    console.log(`🔍 [Worker] User specified bitrate: ${(userBitrate / 1000000).toFixed(2)}Mbps`);
+
+    // 如果用户指定的 bitrate 会升级低码率视频，使用智能值
+    if (userBitrate > originalBitrate && originalBitrate < recommendedBitrate) {
+      console.warn(`⚠️ [Worker] User bitrate (${(userBitrate / 1000000).toFixed(2)}Mbps) would upgrade low-bitrate video (${(originalBitrate / 1000000).toFixed(2)}Mbps), using smart bitrate instead`);
+      return Math.round(smartBitrate);
+    }
+
+    // 用户指定值合理，使用用户值
+    return userBitrate;
+  }
+
+  return Math.round(smartBitrate);
 }
 
 /**
