@@ -81,13 +81,12 @@ async function runPipeline({ file, config, outputHandle }: any) {
     mp4box.onError = (err: any) => reject(new Error(`MP4Box 解析错误: ${err}`));
   });
 
-  // C. 高吞吐流式读取
+  // C. 高吞吐流式读取 (分离 Promise 以便后续控制时序)
   const reader = file.stream().getReader();
   let bytesLoaded = 0;
   const totalSize = file.size;
 
-  // 异步送入 MP4Box
-  (async () => {
+  const feedPromise = (async () => {
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
@@ -97,7 +96,6 @@ async function runPipeline({ file, config, outputHandle }: any) {
       bytesLoaded += value.byteLength;
       postMessage({ type: 'PROGRESS', data: { loaded: bytesLoaded, total: totalSize, progress: (bytesLoaded / totalSize) * 50 } });
     }
-    mp4box.flush();
   })();
 
   // D. 等待轨道信息，然后初始化编解码器和 Muxer（宽高在此时已知）
@@ -220,18 +218,26 @@ async function runPipeline({ file, config, outputHandle }: any) {
       }
     };
 
-    // 等待所有数据读完后 flush 解码器 → 编码器
+    // 关键时序逻辑：必须等 start 之后，再等全部数据读取完毕，最后触发 mp4box.flush()
     (async () => {
-      // 等待读取完成
-      while (bytesLoaded < totalSize) await new Promise(r => setTimeout(r, 50));
-      await decoder?.flush();
-      await encoder?.flush();
-      flushed = true;
-      checkDone();
+      await feedPromise;
+      mp4box.flush(); // 强制提交所有游离 buffer 提取出 samples
+      
+      // 给 decoder 缓冲一下，等全部 sample 给到再执行 decoder flush
+      setTimeout(async () => {
+        await decoder?.flush();
+        await encoder?.flush();
+        flushed = true;
+        checkDone();
+      }, 200);
     })();
   });
 
   await encodeDone;
+
+  if (encodedFrames === 0) {
+    throw new Error('没有任何视频帧被成功编解码，请检查源文件是否包含了正确的视频轨道数据。');
+  }
 
   // E. 收尾
   muxer.finalize();
