@@ -1,7 +1,7 @@
 /**
  * src/engine/workers/media-worker.ts
- * Titan V4 — WebCodecs Pipeline (Architectural Fix)
- * 修复：Muxer 0x0 尺寸 / OPFS 降级静默失败 / 背压控制
+ * Titan V4 — WebCodecs Pipeline (Phase-Locked Feed)
+ * 修复竞态根因：两阶段喂流，reader 暂停期间完成所有 codec 初始化
  */
 
 import { Muxer, StreamTarget } from 'mp4-muxer';
@@ -59,47 +59,45 @@ self.onmessage = async (e: MessageEvent) => {
 async function runPipeline({ file, config, outputHandle }: any) {
   console.log('🚀 [Worker] Pipeline Start');
 
-  // A. OPFS 同步写入句柄（失败则 REJECT 而非静默继续）
+  // A. OPFS 同步写入句柄
   try {
     accessHandle = await (outputHandle as any).createSyncAccessHandle();
   } catch (ioErr: any) {
     throw new Error(`OPFS 写入句柄创建失败: ${ioErr.message}. 请确保浏览器支持 OPFS.`);
   }
 
-  // B. 解封装（MP4Box 动态引入，防止静态提升导致的 ReferenceError）
-  const MP4BoxModule = await import('mp4box');
-  const MP4Box = MP4BoxModule.default || MP4BoxModule;
+  // B. MP4Box 解封装器
+  const MP4Box = await import('mp4box');
   const mp4box = MP4Box.createFile();
 
-  // 使用 Promise 驱动，确保 onReady 与后续流程串行
-  const trackInfoPromise = new Promise<any>((resolve, reject) => {
-    mp4box.onReady = (info: any) => {
-      const track = info.videoTracks[0];
-      if (!track) return reject(new Error('未在源文件中检测到视频轨道'));
-      resolve(track);
-    };
-    mp4box.onError = (err: any) => reject(new Error(`MP4Box 解析错误: ${err}`));
-  });
-
-  // C. 高吞吐流式读取 (分离 Promise 以便后续控制时序)
   const reader = file.stream().getReader();
   let bytesLoaded = 0;
   const totalSize = file.size;
 
-  const feedPromise = (async () => {
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      const buffer = value.buffer as any;
-      buffer.fileStart = bytesLoaded;
-      mp4box.appendBuffer(buffer);
-      bytesLoaded += value.byteLength;
-      postMessage({ type: 'PROGRESS', data: { loaded: bytesLoaded, total: totalSize, progress: (bytesLoaded / totalSize) * 50 } });
-    }
-  })();
+  // C. 第一阶段：喂数据直到 onReady 触发
+  // onReady 在 appendBuffer 内部同步触发，用 flag 捕获，无需 Promise
+  // 关键：reader 在此阶段暂停后，后续所有 async 操作（isConfigSupported 等）
+  // 都不会触发 feedPromise 竞争，彻底消除竞态。
+  let trackInfo: any = null;
+  mp4box.onReady = (info: any) => { trackInfo = info; };
+  mp4box.onError = (err: any) => { throw new Error(`MP4Box 解析错误: ${err}`); };
 
-  // D. 等待轨道信息，然后初始化编解码器和 Muxer（宽高在此时已知）
-  const track = await trackInfoPromise;
+  while (trackInfo === null) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const buffer = value.buffer as any;
+    buffer.fileStart = bytesLoaded;
+    bytesLoaded += value.byteLength;
+    mp4box.appendBuffer(buffer);
+    postMessage({ type: 'PROGRESS', data: { loaded: bytesLoaded, total: totalSize, progress: (bytesLoaded / totalSize) * 50 } });
+  }
+
+  if (!trackInfo?.videoTracks?.[0]) {
+    throw new Error('未在源文件中检测到视频轨道');
+  }
+
+  const track = trackInfo.videoTracks[0];
+  const totalFrames = track.nb_samples || 0;
   const width = track.video.width;
   const height = track.video.height;
 
@@ -107,10 +105,11 @@ async function runPipeline({ file, config, outputHandle }: any) {
   const safeWidth = width % 2 === 0 ? width : width - 1;
   const safeHeight = height % 2 === 0 ? height : height - 1;
 
-  let encCodecStr = 'avc1.4D002A'; // H.264 Main Profile (兼容性最好)
+  // D. 编解码器字符串
+  let encCodecStr = 'avc1.4D002A'; // H.264 Main Profile
   let muxerCodec: 'avc' | 'hevc' | 'av1' | 'vp9' = 'avc';
   if (config.codec === 'libx265') {
-    encCodecStr = 'hev1.1.6.L120.90'; // HEVC Main10
+    encCodecStr = 'hev1.1.6.L120.90';
     muxerCodec = 'hevc';
   } else if (config.codec === 'av1') {
     encCodecStr = 'av01.0.04M.08';
@@ -125,7 +124,7 @@ async function runPipeline({ file, config, outputHandle }: any) {
     hardwareAcceleration: 'prefer-hardware',
   };
 
-  // 🔥 核心重构：调用硬件前，先让浏览器探针验证显卡驱动是否支持该配置！
+  // E. 硬件探针（此时 reader 已暂停，async 操作安全）
   try {
     const support = await VideoEncoder.isConfigSupported(encConfig);
     if (!support.supported) {
@@ -135,111 +134,97 @@ async function runPipeline({ file, config, outputHandle }: any) {
     throw new Error(`硬件探针探测失败: ${supportErr.message}`);
   }
 
-  // 创建 Muxer（使用对齐后的安全宽高）
+  // F. Muxer（使用对齐后的安全宽高）
   muxer = new Muxer({
     target: new StreamTarget({
       onData: (data, offset) => {
-        if (accessHandle) accessHandle.write(data, { at: offset });
+        if (accessHandle) accessHandle.write(data as unknown as BufferSource, { at: offset });
       }
     }),
-    video: {
-      codec: muxerCodec,
-      width: safeWidth,
-      height: safeHeight,
-    },
+    video: { codec: muxerCodec, width: safeWidth, height: safeHeight },
     fastStart: false
   });
 
-  // 编码完成计数器
+  // G. 编码器
   let encodedFrames = 0;
-  const encodeDone = new Promise<void>((resolve) => {
-    let flushed = false;
-    const checkDone = () => {
-      if (flushed && encoder && encoder.encodeQueueSize === 0) resolve();
-    };
-
-    encoder = new VideoEncoder({
-      output: (chunk, metadata) => {
-        try {
-          let safeMetadata = metadata;
-          if (metadata && (metadata.decoderConfig === null || (metadata as any).decoderConfig === undefined)) {
-            // Fix null decoderConfig crashes in mp4-muxer
-            safeMetadata = { ...metadata };
-            delete safeMetadata.decoderConfig;
-          }
-          muxer?.addVideoChunk(chunk, safeMetadata);
-          encodedFrames++;
-          postMessage({ type: 'PROGRESS', data: { loaded: bytesLoaded, total: totalSize, progress: 50 + (encodedFrames / Math.max(1, encodedFrames + (encoder?.encodeQueueSize ?? 0))) * 50 } });
-        } catch (e: any) {
-          postMessage({ type: 'ERROR', data: `Muxer Chunk Error: ${e.message}` });
+  encoder = new VideoEncoder({
+    output: (chunk, metadata) => {
+      try {
+        let safeMetadata = metadata;
+        if (metadata && (metadata.decoderConfig === null || (metadata as any).decoderConfig === undefined)) {
+          safeMetadata = { ...metadata };
+          delete safeMetadata.decoderConfig;
         }
-      },
-      error: (e) => postMessage({ type: 'ERROR', data: `Encoder: ${e.message}` })
-    });
-
-    encoder.configure(encConfig);
-
-    decoder = new VideoDecoder({
-      output: (frame) => {
-        try {
-          // 背压控制：如果编码队列过大则等待
-          if (encoder && encoder.encodeQueueSize < 30) {
-            encoder.encode(frame, { keyFrame: encodedFrames % 60 === 0 });
-          }
-        } catch (e: any) {
-          postMessage({ type: 'ERROR', data: `Encoder.encode Error: ${e.message}` });
-        } finally {
-          frame.close();
-        }
-      },
-      error: (e) => postMessage({ type: 'ERROR', data: `Decoder: ${e.message}` })
-    });
-
-    // 配置解码器
-    const description = extractDescription(track);
-    decoder.configure({
-      codec: track.codec,
-      codedWidth: width,
-      codedHeight: height,
-      description,
-    });
-
-    mp4box.setExtractionOptions(track.id, null, { nbSamples: 1 });
-    mp4box.start();
-
-    mp4box.onSamples = (_id: any, _user: any, samples: any[]) => {
-      for (const sample of samples) {
-        decoder?.decode(new EncodedVideoChunk({
-          type: sample.is_sync ? 'key' : 'delta',
-          timestamp: (sample.cts * 1_000_000) / sample.timescale,
-          duration: (sample.duration * 1_000_000) / sample.timescale,
-          data: sample.data,
-        }));
+        muxer?.addVideoChunk(chunk, safeMetadata);
+        encodedFrames++;
+        postMessage({ type: 'PROGRESS', data: { loaded: bytesLoaded, total: totalSize, progress: 50 + (encodedFrames / Math.max(1, totalFrames)) * 50 } });
+      } catch (e: any) {
+        postMessage({ type: 'ERROR', data: `Muxer Chunk Error: ${e.message}` });
       }
-    };
+    },
+    error: (e) => postMessage({ type: 'ERROR', data: `Encoder: ${e.message}` })
+  });
+  encoder.configure(encConfig);
 
-    // 关键时序逻辑：必须等 start 之后，再等全部数据读取完毕，最后触发 mp4box.flush()
-    (async () => {
-      await feedPromise;
-      mp4box.flush(); // 强制提交所有游离 buffer 提取出 samples
-      
-      // 给 decoder 缓冲一下，等全部 sample 给到再执行 decoder flush
-      setTimeout(async () => {
-        await decoder?.flush();
-        await encoder?.flush();
-        flushed = true;
-        checkDone();
-      }, 200);
-    })();
+  // H. 解码器
+  const description = extractDescription(track, MP4Box);
+  decoder = new VideoDecoder({
+    output: (frame) => {
+      try {
+        if (encoder && encoder.encodeQueueSize < 30) {
+          encoder.encode(frame, { keyFrame: encodedFrames % 60 === 0 });
+        }
+      } catch (e: any) {
+        postMessage({ type: 'ERROR', data: `Encoder.encode Error: ${e.message}` });
+      } finally {
+        frame.close();
+      }
+    },
+    error: (e) => postMessage({ type: 'ERROR', data: `Decoder: ${e.message}` })
+  });
+  decoder.configure({
+    codec: track.codec,
+    codedWidth: width,
+    codedHeight: height,
+    description,
   });
 
-  await encodeDone;
+  // I. 注册 onSamples（必须在 start() 之前）
+  mp4box.onSamples = (_id: any, _user: any, samples: any[]) => {
+    for (const sample of samples) {
+      decoder?.decode(new EncodedVideoChunk({
+        type: sample.is_sync ? 'key' : 'delta',
+        timestamp: (sample.cts * 1_000_000) / sample.timescale,
+        duration: (sample.duration * 1_000_000) / sample.timescale,
+        data: sample.data,
+      }));
+    }
+  };
+  mp4box.setExtractionOptions(track.id, null, { nbSamples: 1 });
+  mp4box.start();
+
+  // J. 第二阶段：继续喂剩余数据
+  // onSamples 已注册，samples 会随 appendBuffer 实时触发，不丢帧
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    const buffer = value.buffer as any;
+    buffer.fileStart = bytesLoaded;
+    bytesLoaded += value.byteLength;
+    mp4box.appendBuffer(buffer);
+    postMessage({ type: 'PROGRESS', data: { loaded: bytesLoaded, total: totalSize, progress: (bytesLoaded / totalSize) * 50 } });
+  }
+  mp4box.flush(); // 强制提交所有游离 buffer，触发剩余 onSamples
+
+  // K. 排干编解码管线（顺序：先 decoder 再 encoder）
+  await decoder.flush();
+  await encoder.flush();
 
   if (encodedFrames === 0) {
     throw new Error('没有任何视频帧被成功编解码，请检查源文件是否包含了正确的视频轨道数据。');
   }
 
-  // E. 收尾
+  // L. 收尾
   muxer.finalize();
   if (accessHandle) {
     accessHandle.flush();
@@ -251,12 +236,12 @@ async function runPipeline({ file, config, outputHandle }: any) {
 }
 
 // ── 辅助函数 ───────────────────────────────────────────────────────
-function extractDescription(track: any): Uint8Array | undefined {
+function extractDescription(track: any, MP4BoxRef: any): Uint8Array | undefined {
   try {
     for (const entry of track.mdia.minf.stbl.stsd.entries) {
       const box = entry.avcC || entry.hvcC;
       if (box) {
-        const DS = (MP4Box as any).DataStream || (self as any).DataStream;
+        const DS = (MP4BoxRef as any).DataStream || (self as any).DataStream;
         if (!DS) { console.warn('[Worker] DataStream not available'); return undefined; }
         const stream = new DS(undefined, 0, DS.BIG_ENDIAN);
         box.write(stream);
