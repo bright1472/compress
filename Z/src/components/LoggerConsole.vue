@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch, nextTick } from 'vue';
+import { ref, computed, onMounted, watch, nextTick } from 'vue';
 import { logger } from '../engine/logger';
 import { t } from '../locales/i18n';
 
@@ -8,6 +8,12 @@ const emit = defineEmits<{ (e: 'close'): void }>();
 
 const logs = ref<any[]>([]);
 const terminalRef = ref<HTMLElement | null>(null);
+const showErrorsOnly = ref(false);
+
+const filteredLogs = computed(() => {
+  if (!showErrorsOnly.value) return logs.value;
+  return logs.value.filter(l => l.level === 'error');
+});
 
 const updateLogs = () => {
   logs.value = logger.getLogs();
@@ -45,6 +51,10 @@ const copyLog = (log: any) => {
           Diagnostic Console <span class="paused-badge">(Paused)</span>
         </div>
         <div class="logger-actions">
+          <label class="error-filter">
+            <input type="checkbox" v-model="showErrorsOnly">
+            <span class="filter-label">Errors Only</span>
+          </label>
           <button class="logger-btn refresh-btn" @click="updateLogs" title="Fetch latest logs">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
@@ -52,8 +62,8 @@ const copyLog = (log: any) => {
         </div>
       </div>
       <div class="logger-body" ref="terminalRef">
-        <div v-if="logs.length === 0" class="log-empty">No logs yet...</div>
-        <div v-for="(log, idx) in logs" :key="idx" class="log-row" :class="log.level" @click="copyLog(log)" title="Click to copy">
+        <div v-if="filteredLogs.length === 0" class="log-empty">No logs yet...</div>
+        <div v-for="(log, idx) in filteredLogs" :key="idx" class="log-row" :class="log.level" @click="copyLog(log)" title="Click to copy">
           <span class="log-time">{{ new Date(log.timestamp).toISOString().split('T')[1].slice(0,-1) }}</span>
           <span class="log-cat">[{{ log.category }}]</span>
           <span class="log-msg">{{ log.message }}</span>
@@ -73,6 +83,12 @@ const copyLog = (log: any) => {
 .logger-actions { display: flex; align-items: center; gap: 8px; }
 .logger-btn { background: none; border: none; color: #888; cursor: pointer; padding: 4px; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
 .logger-btn:hover { background: #333; color: #fff; }
+
+.error-filter { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 4px 8px; border-radius: 4px; border: 1px solid #333; background: #1e1e1e; transition: all 0.2s; }
+.error-filter:hover { background: #333; }
+.error-filter input { width: 12px; height: 12px; accent-color: #f48771; cursor: pointer; }
+.filter-label { font-size: 0.65rem; color: #aaa; font-weight: 500; user-select: none; }
+
 .logger-body { flex: 1; overflow-y: auto; padding: 10px; background: #1e1e1e; font-size: 0.75rem; color: #ccc; scrollbar-width: thin; scrollbar-color: #444 transparent; }
 .log-row { display: flex; align-items: flex-start; gap: 8px; padding: 4px 6px; border-radius: 4px; cursor: pointer; transition: background 0.1s; position: relative; }
 .log-row:hover { background: rgba(255,255,255,0.05); }
