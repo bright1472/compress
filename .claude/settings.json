@@ -4,7 +4,8 @@
       "mcp__plugin_claude-mem_mcp-search__smart_search",
       "mcp__plugin_claude-mem_mcp-search__smart_outline",
       "Bash(python3 -c ' *)",
-      "Bash(npx vue-tsc *)"
+      "Bash(npx vue-tsc *)",
+      "mcp__plugin_claude-mem_mcp-search__get_observations"
     ]
   }
 }
