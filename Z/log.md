@@ -74,3 +74,53 @@ media-worker.ts:222 🎬 [Worker] Processing 1629 frames...
 media-worker.ts:239 ✅ [Worker] Encode complete: 1629/1629 frames
 media-worker.ts:251 🎉 [Worker] Pipeline Complete
 logger.ts:50 🎉 [Processor] Complete
+
+---
+
+## 2026-04-17 mediabunny 迁移（方案A落地）
+
+### 背景
+旧 media-worker.ts（534行）手写 WebCodecs 全链路（MP4Box 两阶段 demux、avcC 提取、VideoEncoder/Decoder、mp4-muxer），累计修 10+ bug 但结构性问题仍在：
+- H.264 Level 硬编码 `avc1.4D002A`（L4.2），2316×1214 等大分辨率被硬件编码器拒绝
+- 进度条 Phase1/Phase2 两段跳变（60MB/s → 0）
+- 500+ 行 MP4 边界代码（moov-at-end、avcC box 遍历）
+- 硬件编码失败无自动回退
+
+### 变更
+用 mediabunny `Conversion` API 替换 worker 内部管线，**processor.ts 消息协议完全不变**（零侵入）。
+
+**文件变更**：
+- `src/engine/workers/media-worker.ts` — 全量重写（534行 → ~180行）
+- `src/engine/workers/media-worker.legacy.ts` — 旧代码备份，验证无回归后删除
+
+**丢弃的代码**：
+- `extractAVCCFromMp4boxBoxes` 及全部 MP4Box 调用
+- 两阶段 reader1/reader2 流式喂数据
+- 手工 VideoEncoder/VideoDecoder 管理
+- mp4-muxer 的 Muxer + StreamTarget
+- 编码队列背压循环、手写 keyframe 计数
+- 硬编码 codec string（`avc1.4D002A` 等）
+
+**保留**：
+- `calculateSmartBitrate` — 业务规则（防止低码率视频被放大）
+- 消息协议（PING/PONG, START_PROCESS, PROGRESS, DONE, ERROR, STOP）
+
+**mediabunny 解决的痛点**：
+| 痛点 | 解决方式 |
+|---|---|
+| Level 硬编码 | 传 `codec: 'avc'`，库按分辨率自动选 Level |
+| avcC 提取 | 库内部自动处理 |
+| moov-at-end | `Input({ source: new BlobSource(file) })` 自动处理 |
+| 进度跳变 | `conversion.onProgress` 单一 0→1 连续进度 |
+| 硬件失败无回退 | `hardwareAcceleration: 'no-preference'` 自动降级 |
+| 取消处理 | `conversion.cancel()` + `ConversionCanceledError` |
+
+### 依赖
+mediabunny 1.40.1 和 @ffmpeg/ffmpeg 0.12.15 已在 `package.json` 中，无需新增。
+验证无回归后可移除 `mp4-muxer` 和 `mp4box` 依赖。
+
+### 验证状态
+- [x] vue-tsc 类型检查通过（media-worker.ts 零报错）
+- [ ] 浏览器实测：2.2MB 视频 → ≤ 2MB，进度连续
+- [ ] 浏览器实测：2316×1214 大分辨率 → 不报 codec 不支持
+- [ ] 浏览器实测：160MB 大视频 → 进度不跳变，硬件失败自动回退
