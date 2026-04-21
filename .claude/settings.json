@@ -5,7 +5,14 @@
       "mcp__plugin_claude-mem_mcp-search__smart_outline",
       "Bash(python3 -c ' *)",
       "Bash(npx vue-tsc *)",
-      "mcp__plugin_claude-mem_mcp-search__get_observations"
+      "mcp__plugin_claude-mem_mcp-search__get_observations",
+      "Read(//e/resource/wx-proj/**)",
+      "Bash(xargs grep *)",
+      "Bash(powershell -Command \"Get-Content 'e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\src\\\\components\\\\Dashboard.vue' | Select-Object -Index \\(17..45\\)\")",
+      "Bash(powershell -Command \"Get-Content 'e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\src\\\\components\\\\Dashboard.vue' | Select-Object -Index \\(148..185\\)\")",
+      "Bash(powershell -Command \"Get-Content 'e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\src\\\\components\\\\Dashboard.vue' | Select-Object -Index \\(235..265\\)\")",
+      "Bash(powershell -Command \"Get-Content 'e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\src\\\\components\\\\Dashboard.vue' | Select-Object -Index \\(455..510\\)\")",
+      "Bash(powershell -Command \"Get-Content 'e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\src\\\\components\\\\Dashboard.vue' | Select-Object -Index \\(85..115\\)\")"
     ]
   }
 }

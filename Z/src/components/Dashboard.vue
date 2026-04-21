@@ -19,7 +19,7 @@ interface QueueItem {
   id: string; file: File; status: 'pending' | 'processing' | 'done' | 'error';
   progress: number; throughput: number; originalUrl: string;
   compressedUrl: string; compressedSize: number; errorMsg: string;
-  engineUsed: string;
+  engineUsed: string; startTime: number; elapsed: number; remaining: number;
 }
 
 // ── 文件格式验证 ─────────────────────────────────────────────────
@@ -103,6 +103,7 @@ const addFiles = (files: FileList | File[]) => {
       file, status: 'pending', progress: 0, throughput: 0,
       originalUrl: URL.createObjectURL(file),
       compressedUrl: '', compressedSize: 0, errorMsg: '', engineUsed: '',
+      startTime: 0, elapsed: 0, remaining: 0,
     };
     queue.value.push(item);
     if (!activeItemId.value) activeItemId.value = item.id;
@@ -148,11 +149,18 @@ const router = new EngineRouter();
 const engineLoading = ref(false);
 const routeInfo = ref('');
 
+const fmtTime = (sec: number): string => {
+  if (sec <= 0) return '--';
+  const m = Math.floor(sec / 60);
+  const s = Math.floor(sec % 60);
+  return m > 0 ? `${m}m${s.toString().padStart(2, '0')}s` : `${s}s`;
+};
+
 const processItem = async (item: QueueItem) => {
   item.status = 'processing';
   activeItemId.value = item.id;
   item.progress = 0;
-  const startTime = Date.now();
+  item.startTime = Date.now();
 
   try {
     engineLoading.value = true;
@@ -161,8 +169,10 @@ const processItem = async (item: QueueItem) => {
       { codec: codec.value, crf: crf.value, preset: preset.value },
       (pct) => {
         item.progress = Math.min(pct, 99.9);
-        const elapsed = (Date.now() - startTime) / 1000;
+        const elapsed = (Date.now() - item.startTime) / 1000;
         if (elapsed > 0) item.throughput = (item.file.size * (pct / 100)) / 1048576 / elapsed;
+        item.elapsed = elapsed;
+        item.remaining = pct > 2 ? (elapsed / pct) * (100 - pct) : 0;
       },
       (decision) => {
         item.engineUsed = decision.engine === 'ffmpeg' ? 'FFmpeg WASM' : 'WebCodecs';
@@ -173,6 +183,7 @@ const processItem = async (item: QueueItem) => {
     item.compressedSize = resultBlob.size;
     if (item.compressedUrl) URL.revokeObjectURL(item.compressedUrl);
     item.compressedUrl = URL.createObjectURL(resultBlob);
+    item.elapsed = (Date.now() - item.startTime) / 1000;
     item.progress = 100;
     item.status = 'done';
   } catch (e: any) {
@@ -247,6 +258,8 @@ onUnmounted(() => { router.terminate(); });
         <span class="hc-rate">{{ currentProcessing.throughput.toFixed(1) }} MB/s</span>
         <span class="hc-sep">·</span>
         <span class="hc-prog">{{ currentProcessing.progress.toFixed(1) }}%</span>
+        <span class="hc-sep">·</span>
+        <span class="hc-prog">剩余 {{ fmtTime(currentProcessing.remaining) }}</span>
       </div>
 
       <div class="header-right">
@@ -475,6 +488,10 @@ onUnmounted(() => { router.terminate(); });
                 <span class="mc-val accent">{{ activeItem.throughput.toFixed(1) }}</span>
                 <span class="mc-unit">MB/s 速率</span>
               </div>
+              <div class="mc">
+                <span class="mc-val">{{ fmtTime(activeItem.remaining) }}</span>
+                <span class="mc-unit">剩余时间</span>
+              </div>
             </div>
           </div>
         </div>
@@ -487,6 +504,7 @@ onUnmounted(() => { router.terminate(); });
               <span class="rs-arrow">→</span>
               <span class="rs-item compressed">压缩后 {{ fileSizeMB(activeItem.compressedSize) }} MB</span>
               <span class="rs-badge">节省 {{ compressionRatio(activeItem) }}%</span>
+              <span class="rs-badge">耗时 {{ fmtTime(activeItem.elapsed) }}</span>
             </div>
             <button class="btn-dl-single" @click="downloadItem(activeItem)">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
