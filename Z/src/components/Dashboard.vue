@@ -52,9 +52,24 @@ const isDragging = ref(false);
 const fileInputRef = ref<HTMLInputElement | null>(null);
 
 // ── Config ────────────────────────────────────────────────────────
-const codec = ref<'libx264' | 'libx265' | 'av1'>('libx264');
-const crf = ref(28);
-const preset = ref<'ultrafast' | 'fast' | 'medium' | 'slow'>('fast');
+const SETTINGS_KEY = 'titan-settings';
+const _savedSettings = (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null'); } catch { return null; } })();
+const VALID_CODECS = new Set(['libx264', 'libx265', 'av1']);
+const VALID_PRESETS = new Set(['ultrafast', 'fast', 'medium', 'slow']);
+
+const codec = ref<'libx264' | 'libx265' | 'av1'>(
+  VALID_CODECS.has(_savedSettings?.codec) ? _savedSettings.codec : 'libx264'
+);
+const crf = ref<number>(
+  typeof _savedSettings?.crf === 'number' && _savedSettings.crf >= 18 && _savedSettings.crf <= 40
+    ? _savedSettings.crf : 28
+);
+const preset = ref<'ultrafast' | 'fast' | 'medium' | 'slow'>(
+  VALID_PRESETS.has(_savedSettings?.preset) ? _savedSettings.preset : 'fast'
+);
+watch([codec, crf, preset], () => {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ codec: codec.value, crf: crf.value, preset: preset.value }));
+});
 
 const codecOptions = [
   { value: 'libx264', label: 'H.264', badge: 'AVC' },
