@@ -21,7 +21,13 @@
       "Bash(powershell -File -)",
       "mcp__plugin_claude-mem_mcp-search__timeline",
       "WebSearch",
-      "Bash(npm install *)"
+      "Bash(npm install *)",
+      "WebFetch(domain:docs.rs)",
+      "WebFetch(domain:stackoverflow.com)",
+      "WebFetch(domain:www.reddit.com)",
+      "WebFetch(domain:users.rust-lang.org)",
+      "WebFetch(domain:www.mintlify.com)",
+      "WebFetch(domain:github.com)"
     ]
   }
 }
