@@ -227,3 +227,117 @@ Cross-Origin-Embedder-Policy: require-corp
 | `components/Dashboard.vue` | UI + 队列管理 + 参数持久化 |
 | `public/ffmpeg-mt/` | 多线程 FFmpeg WASM 静态资源 |
 | `public/ffmpeg/` | 旧版单线程 FFmpeg WASM 静态资源（可删除） |
+
+---
+
+## 9. Native Host 极速模式（插拔式 GPU 加速）
+
+**状态：已实现 | 编译通过 | 待安装测试**
+
+### 9.1 架构概览
+
+```
+Web UI (Dashboard.vue)
+  │
+  ├── 检测到 Native Host → 显示 🚀 极速模式入口
+  │
+Chrome Extension (native-bridge/)
+  │
+  ├── extension-page.html/css/js  → 独立 UI（目录选择/队列/进度）
+  ├── background.js              → Service Worker，管理 Native Messaging 连接
+  │
+  ▼  stdin/stdout (JSON only, 4-byte LE length prefix)
+  │
+Rust Native Host (titan-host.exe)
+  │
+  ├── GPU 编码器检测（NVENC > QSV > AMF > libx264）
+  ├── FFmpeg 调用 + stderr 进度解析
+  ├── 目录扫描（walkdir）+ 批量编码
+  │
+  ▼  直接写磁盘
+  │
+输出文件: xxx_titan.mp4（同输出目录）
+```
+
+### 9.2 技术要点
+
+| 维度 | 决策 | 说明 |
+|------|------|------|
+| 通信协议 | Native Messaging | Chrome 沙盒保护，4-byte LE 长度前缀 + UTF-8 JSON |
+| 数据流转 | 纯 JSON，零二进制 | 绕过 1MB 消息限制，无 Base64 开销 |
+| 文件 IO | Native 端直接读写 | 扩展页输入目录路径，Native Host 扫描+编码+写盘 |
+| GPU 检测 | 双保险 | `ffmpeg -encoders` 确认编译 + 1帧合成实测确认硬件 |
+| 线程模型 | tokio async | `Arc<Mutex<Stdout>>` 线程安全消息发送 |
+| 二进制大小 | ~1.7MB | `opt-level=z` + LTO + strip |
+
+### 9.3 Native Messaging 协议
+
+**请求类型**：
+| 类型 | 字段 | 响应 |
+|------|------|------|
+| `Ping` | — | `pong` + 可用编码器列表 |
+| `ListFiles` | `dir` | `files` + 视频路径数组 |
+| `Compress` | `input_dir`, `output_dir`, `codec`, `crf`, `preset`, `_requestId` | `progress`/`complete`/`error` |
+
+**响应类型**：
+| 类型 | 字段 |
+|------|------|
+| `pong` | `encoders: string[]` |
+| `files` | `files: string[]` |
+| `progress` | `file`, `percent`, `fps`, `eta`, `_requestId` |
+| `complete` | `total`, `duration_sec`, `_requestId` |
+| `error` | `message`, `_requestId` |
+
+### 9.4 编码器映射
+
+用户选择 → 实际编码器（根据硬件自动匹配）：
+
+| 用户选择 | NVENC | QSV | AMF | Software |
+|----------|-------|-----|-----|----------|
+| H.264 | h264_nvenc | h264_qsv | h264_amf | libx264 |
+| H.265 | hevc_nvenc | hevc_qsv | hevc_amf | libx265 |
+| AV1 | av1_nvenc | av1_qsv | — | libaom-av1 |
+
+GPU 编码器不可用时，软件编码器参数：
+- libx264/libx265: `-preset` + `-crf` + `-threads 0`
+- libaom-av1: `-cpu-used 8` + `-crf`
+
+GPU 编码器参数：`-preset` (p1-p7) + `-cq` (CRF 等效)
+
+### 9.5 关键文件
+
+| 文件 | 职责 |
+|------|------|
+| `native-host/src/main.rs` | Native Host 核心 (~400行) |
+| `native-host/Cargo.toml` | Rust 项目配置 |
+| `native-host/install-titan-host.ps1` | Windows 一键安装脚本 |
+| `native-host/titan-host.json` | Chrome Native Messaging Host Manifest（模板） |
+| `native-bridge/manifest.json` | Chrome Extension MV3 清单 |
+| `native-bridge/background.js` | Extension Service Worker |
+| `native-bridge/extension-page.{html,css,js}` | 极速模式独立 UI |
+| `native-bridge/icons/icon-128.png` | 扩展图标 |
+
+### 9.6 安装步骤
+
+```powershell
+# 1. 编译 Rust Native Host（已编译通过）
+cd Z/native-host
+cargo build --release
+
+# 2. 运行安装脚本
+powershell -ExecutionPolicy Bypass -File install-titan-host.ps1
+
+# 3. Chrome 加载扩展
+# chrome://extensions → 开发者模式 → 加载已解压的扩展 → 选择 native-bridge/
+
+# 4. 复制 Extension ID 到 titan-host.json 的 allowed_origins
+# 然后重新加载扩展
+```
+
+### 9.7 依赖
+
+| 依赖 | 状态 | 说明 |
+|------|------|------|
+| FFmpeg + ffprobe | 必需 | 必须在系统 PATH 中，安装脚本会检测 |
+| GPU 驱动 | 可选 | 无 GPU 时自动降级到软件编码器 |
+| Chrome / Edge | 必需 | 版本 ≥ 110 |
