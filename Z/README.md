@@ -1,25 +1,29 @@
 # Project Titan — Web 视频压缩引擎
 
-> Vue 3 + WebAssembly + WebCodecs | 浏览器端 10GB+ 视频压缩
+> Vue 3 + WebAssembly + WebCodecs | 浏览器端视频压缩，硬件加速
 
 ---
 
 ## 架构概览
 
-Titan 采用**双引擎路由**策略，根据文件大小自动选择最优处理路径：
+Titan 采用**双引擎路由 + 自动降级**策略：
 
 ```
 用户文件
    │
    ▼
 EngineRouter（engine-router.ts）
-   ├─ ≤ 2GB ──► FFmpeg WASM（兼容性优先）
-   └─ > 2GB ──► WebCodecs Worker（mediabunny，性能优先）
+   │
+   ├─ WebCodecs 可用 ──► WebCodecs Worker（mediabunny，性能优先）
+   │                         │
+   │                     失败? ──YES──► 降级到 FFmpeg WASM
+   │
+   └─ WebCodecs 不可用 ──► FFmpeg WASM（兼容性兜底）
 ```
 
 - **Main Thread**：Vue 3 UI，状态管理，队列调度（Dashboard.vue）
-- **FFmpeg WASM**：浏览器内运行的 FFmpeg，支持 H.264 / H.265 / AV1
-- **WebCodecs Worker**：基于 [mediabunny v1.40.1](https://github.com/Joery-M/mediabunny) 的 Conversion API，处理超大文件
+- **FFmpeg WASM**：浏览器内运行的 FFmpeg，多线程版本 `@ffmpeg/core-mt`，支持 H.264 / H.265 / AV1
+- **WebCodecs Worker**：基于 [mediabunny v1.40.1](https://github.com/Vanilagy/mediabunny) 的 Conversion API，强制 GPU 硬件加速
 
 ---
 
@@ -28,10 +32,12 @@ EngineRouter（engine-router.ts）
 ### 压缩参数
 - **编码格式**：H.264 (AVC) / H.265 (HEVC) / AV1，可切换
 - **质量控制**：CRF 滑块（18–40），实时显示质量档位
+- **速度预设**：ultrafast / fast / medium / slow（条形可视化）
 - **智能码率**：`calculateSmartBitrate` 自动计算目标码率
   - 原始码率 < 分辨率推荐值 → 使用 80% 原始码率
   - 原始码率 ≥ 分辨率推荐值 → 限制到推荐上限（SD 1.5M / HD 4M / FHD 8M / 4K 30M）
   - 防止膨胀：用户指定码率超过原始时自动回退到智能值
+- **设置持久化**：codec / CRF / preset 自动保存到 localStorage，刷新不丢失
 
 ### 处理进度
 - 实时进度百分比 + MB/s 速率
@@ -42,8 +48,9 @@ EngineRouter（engine-router.ts）
 ### UI 功能
 - 拖拽 / 点击上传，支持批量队列
 - 完成后内置对比滑块（ComparisonSlider）查看压缩前后画质
-- 深色 / 亮色主题切换
+- 深色 / 亮色主题切换（持久化）
 - 多语言（i18n）
+- 内置日志控制台（LoggerConsole）
 
 ---
 
@@ -52,10 +59,11 @@ EngineRouter（engine-router.ts）
 | 层 | 技术 |
 |----|------|
 | UI 框架 | Vue 3 + TypeScript + Vite |
-| 小文件引擎 | FFmpeg WASM |
-| 大文件引擎 | mediabunny v1.40.1（WebCodecs API） |
-| 封装格式 | MP4（mp4-muxer / MP4Box） |
-| 硬件加速 | `hardwareAcceleration: 'no-preference'`（浏览器自动选择） |
+| 主引擎 | mediabunny v1.40.1（WebCodecs Conversion API） |
+| 硬件加速 | `hardwareAcceleration: 'prefer-hardware'`（强制 GPU encoder） |
+| 降级引擎 | FFmpeg WASM 多线程（`@ffmpeg/core-mt`，`-threads 0` 自动多核） |
+| 封装格式 | MP4（mediabunny Mp4OutputFormat） |
+| 磁盘写入 | OPFS `FileSystemSyncAccessHandle`（同步写入，零拷贝） |
 
 ---
 
