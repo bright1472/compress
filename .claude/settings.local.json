@@ -39,7 +39,8 @@
       "Bash(mkdir -p \"/d/qmd-data/qmd/models\")",
       "Bash(mv /d/qmd-data/models/*.gguf \"/d/qmd-data/qmd/models/\")",
       "Bash(XDG_CACHE_HOME=/d/qmd-data INDEX_PATH=/d/qmd-data/index.sqlite qmd status)",
-      "Bash(taskkill /PID 8328 /F)"
+      "Bash(taskkill /PID 8328 /F)",
+      "Bash(npx tsc *)"
     ]
   }
 }
