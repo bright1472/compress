@@ -2,13 +2,26 @@ import { ref, computed } from 'vue';
 
 export const zh = {
   app: {
-    title: 'Titan Compress',
-    subtitle: 'PROFESSIONAL MEDIA ENGINE',
+    title: '泰坦压缩',
+    subtitle: 'NATIVE-GRADE MEDIA ENGINE',
+    slogan: '免视频上传下载 · 极致隐私 · GPU 加速',
     darkMode: '暗色',
     lightMode: '亮色',
   },
+  nav: {
+    diagnostic: '诊断日志',
+    settings: '压缩设置',
+    toggleLight: '切换亮色',
+    toggleDark: '切换暗色',
+  },
+  stats: {
+    files: '文件',
+    done: '已完成',
+    saved: '节省',
+  },
   queue: {
     title: '文件队列',
+    header: '队列',
     addFiles: '+ 选择视频文件',
     pending: '待处理',
     processing: '处理中...',
@@ -19,8 +32,11 @@ export const zh = {
     dropToAdd: '松开以添加到队列',
     empty: '拖入文件开始',
     clearQueue: '清空队列',
+    download: '下载',
+    remove: '移除',
   },
   config: {
+    title: '压缩参数设置',
     codec: '编码格式',
     bestCompatibility: '兼容性最佳',
     highCompression: '高效压缩',
@@ -41,6 +57,10 @@ export const zh = {
     recommended: '均衡推荐',
     moreCompression: '更高压缩',
     bestQuality: '最优质量',
+    comingSoon: '即将推出',
+    resScale: '分辨率缩放',
+    audioTrack: '音频轨道',
+    metaStrip: '元数据擦除',
   },
   process: {
     start: '开始压缩',
@@ -58,23 +78,51 @@ export const zh = {
     encodingFailed: '编码失败',
     errorHint: '请检查：WebCodecs 浏览器支持 · 视频格式是否有效',
     downloadAll: '全部下载 ({n})',
+    remainingTime: '剩余 {t}',
+  },
+  metrics: {
+    codec: '编码器',
+    quality: '质量',
+    throughput: '速度',
+    remaining: '剩余时间',
   },
   slider: {
     original: 'ORIGINAL',
     compressed: 'COMPRESSED',
     dragToCompare: '拖动对比 · 时间轴已同步',
+  },
+  console: {
+    title: '诊断控制台',
+    paused: '(已暂停)',
+    errorsOnly: '仅显示错误',
+    refresh: '获取最新日志',
+    empty: '暂无日志...',
+    copy: '复制',
   }
 };
 
 export const en = {
   app: {
     title: 'Titan Compress',
-    subtitle: 'PROFESSIONAL MEDIA ENGINE',
+    subtitle: 'NATIVE-GRADE MEDIA ENGINE',
+    slogan: 'NO UPLOAD · TOTAL PRIVACY · GPU ACCELERATED',
     darkMode: 'Dark',
     lightMode: 'Light',
   },
+  nav: {
+    diagnostic: 'Diagnostic Logs',
+    settings: 'Compression Settings',
+    toggleLight: 'Switch to Light Mode',
+    toggleDark: 'Switch to Dark Mode',
+  },
+  stats: {
+    files: 'FILES',
+    done: 'DONE',
+    saved: 'MB SAVED',
+  },
   queue: {
     title: 'File Queue',
+    header: 'QUEUE',
     addFiles: '+ Select Videos',
     pending: 'Pending',
     processing: 'Processing...',
@@ -85,8 +133,11 @@ export const en = {
     dropToAdd: 'Release to add to queue',
     empty: 'Drop files to start',
     clearQueue: 'Clear Queue',
+    download: 'Download',
+    remove: 'Remove',
   },
   config: {
+    title: 'COMPRESSION SETTINGS',
     codec: 'Codec',
     bestCompatibility: 'Best Compat.',
     highCompression: 'High Compress',
@@ -107,6 +158,10 @@ export const en = {
     recommended: 'Recommended',
     moreCompression: 'Smaller File',
     bestQuality: 'Best Quality',
+    comingSoon: 'COMING SOON',
+    resScale: 'Resolution Scale',
+    audioTrack: 'Audio Track',
+    metaStrip: 'Metadata Strip',
   },
   process: {
     start: 'Start Compression',
@@ -124,13 +179,29 @@ export const en = {
     encodingFailed: 'ENCODING FAILED',
     errorHint: 'Check: WebCodecs browser support · Valid file format',
     downloadAll: 'Download All ({n})',
+    remainingTime: 'Remaining {t}',
+  },
+  metrics: {
+    codec: 'CODEC',
+    quality: 'QUALITY',
+    throughput: 'SPEED',
+    remaining: 'REMAINING',
   },
   slider: {
     original: 'ORIGINAL',
     compressed: 'COMPRESSED',
     dragToCompare: 'Drag to compare · Timeline synced',
+  },
+  console: {
+    title: 'Diagnostic Console',
+    paused: '(Paused)',
+    errorsOnly: 'Errors Only',
+    refresh: 'Fetch latest logs',
+    empty: 'No logs yet...',
+    copy: 'Copy',
   }
 };
+
 
 export type LocaleInfo = 'en' | 'zh';
 type Dict = typeof zh;

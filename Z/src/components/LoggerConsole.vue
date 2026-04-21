@@ -48,26 +48,26 @@ const copyLog = (log: any) => {
       <div class="logger-header">
         <div class="logger-title">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M4 17l6-6-6-6m8 14h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-          Diagnostic Console <span class="paused-badge">(Paused)</span>
+          {{ t('console.title') }} <span class="paused-badge">{{ t('console.paused') }}</span>
         </div>
         <div class="logger-actions">
           <label class="error-filter">
             <input type="checkbox" v-model="showErrorsOnly">
-            <span class="filter-label">Errors Only</span>
+            <span class="filter-label">{{ t('console.errorsOnly') }}</span>
           </label>
-          <button class="logger-btn refresh-btn" @click="updateLogs" title="Fetch latest logs">
+          <button class="logger-btn refresh-btn" @click="updateLogs" :title="t('console.refresh')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
           </button>
           <button class="logger-btn logger-close" @click="emit('close')">✕</button>
         </div>
       </div>
       <div class="logger-body" ref="terminalRef">
-        <div v-if="filteredLogs.length === 0" class="log-empty">No logs yet...</div>
+        <div v-if="filteredLogs.length === 0" class="log-empty">{{ t('console.empty') }}</div>
         <div v-for="(log, idx) in filteredLogs" :key="idx" class="log-row" :class="log.level" @click="copyLog(log)" title="Click to copy">
           <span class="log-time">{{ new Date(log.timestamp).toISOString().split('T')[1].slice(0,-1) }}</span>
           <span class="log-cat">[{{ log.category }}]</span>
           <span class="log-msg">{{ log.message }}</span>
-          <span class="log-copy-hint">Copy</span>
+          <span class="log-copy-hint">{{ t('console.copy') }}</span>
         </div>
       </div>
     </div>

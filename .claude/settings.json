@@ -18,7 +18,8 @@
       "Bash(powershell -Command \"Get-Content 'e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\src\\\\components\\\\Dashboard.vue' | Select-Object -Index \\(535..565\\)\")",
       "Bash(powershell -Command \"Get-Content 'e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\src\\\\components\\\\Dashboard.vue' | Select-Object -Index \\(525..548\\)\")",
       "Bash(powershell -Command *)",
-      "Bash(powershell -File -)"
+      "Bash(powershell -File -)",
+      "mcp__plugin_claude-mem_mcp-search__timeline"
     ]
   }
 }

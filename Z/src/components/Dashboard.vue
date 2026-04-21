@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { ref, computed, onUnmounted, onMounted, watch } from 'vue';
 import { EngineRouter } from '../engine/engine-router';
 import ComparisonSlider from './ComparisonSlider.vue';
@@ -57,16 +57,16 @@ const crf = ref(28);
 const preset = ref<'ultrafast' | 'fast' | 'medium' | 'slow'>('fast');
 
 const codecOptions = [
-  { value: 'libx264', label: 'H.264', badge: 'AVC',  desc: '兼容性最佳' },
-  { value: 'libx265', label: 'H.265', badge: 'HEVC', desc: '高效压缩' },
-  { value: 'av1',     label: 'AV1',   badge: 'AV1',  desc: '次世代格式' },
+  { value: 'libx264', label: 'H.264', badge: 'AVC' },
+  { value: 'libx265', label: 'H.265', badge: 'HEVC' },
+  { value: 'av1',     label: 'AV1',   badge: 'AV1' },
 ] as const;
 
 const presetOptions = [
-  { value: 'ultrafast', label: '极速',  bars: 1, desc: '文件稍大' },
-  { value: 'fast',      label: '快速',  bars: 2, desc: '均衡推荐' },
-  { value: 'medium',    label: '标准',  bars: 3, desc: '更高压缩' },
-  { value: 'slow',      label: '精细',  bars: 4, desc: '最优质量' },
+  { value: 'ultrafast', bars: 1 },
+  { value: 'fast',      bars: 2 },
+  { value: 'medium',    bars: 3 },
+  { value: 'slow',      bars: 4 },
 ] as const;
 
 // ── Computed ──────────────────────────────────────────────────────
@@ -206,7 +206,7 @@ const processItem = async (item: QueueItem) => {
     item.status = 'done';
   } catch (e: any) {
     item.status = 'error';
-    item.errorMsg = e.message || '处理失败';
+    item.errorMsg = e.message || t.value('process.encodingFailed');
     engineLoading.value = false;
   }
 };
@@ -263,8 +263,8 @@ onUnmounted(() => { router.terminate(); });
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/></svg>
         </div>
         <div>
-          <span class="brand-name">TITAN COMPRESS</span>
-          <span class="brand-sub">GPU ACCELERATED</span>
+          <span class="brand-name">{{ t('app.title') }}</span>
+          <span class="brand-sub">{{ t('app.slogan') }}</span>
         </div>
       </div>
 
@@ -277,15 +277,15 @@ onUnmounted(() => { router.terminate(); });
         <span class="hc-sep">·</span>
         <span class="hc-prog">{{ currentProcessing.progress.toFixed(1) }}%</span>
         <span class="hc-sep">·</span>
-        <span class="hc-prog">剩余 {{ fmtTime(currentProcessing.remaining) }}</span>
+        <span class="hc-prog">{{ t('process.remainingTime', { t: fmtTime(currentProcessing.remaining) }) }}</span>
       </div>
 
       <div class="header-right">
         <!-- Utility buttons -->
-        <button class="hdr-icon-btn" @click="openDiagnosticLogs" title="Diagnostic Logs">
+        <button class="hdr-icon-btn" @click="openDiagnosticLogs" :title="t('nav.diagnostic')">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 17l6-6-6-6m8 14h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
-        <button class="hdr-icon-btn" @click="openSettings" title="Compression Settings" :class="{ active: showSettings }">
+        <button class="hdr-icon-btn" @click="openSettings" :title="t('nav.settings')" :class="{ active: showSettings }">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.8"/></svg>
         </button>
 
@@ -297,7 +297,7 @@ onUnmounted(() => { router.terminate(); });
         <div class="hdr-divider"></div>
 
         <!-- Theme toggle -->
-        <button class="theme-switch" @click="toggleTheme" :title="isDark ? '切换亮色' : '切换暗色'">
+        <button class="theme-switch" @click="toggleTheme" :title="isDark ? t('nav.toggleLight') : t('nav.toggleDark')">
           <div class="ts-track" :class="{ light: !isDark }">
             <div class="ts-thumb" :class="{ light: !isDark }">
               <svg v-if="isDark" width="10" height="10" viewBox="0 0 24 24" fill="none"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" fill="currentColor"/></svg>
@@ -324,22 +324,22 @@ onUnmounted(() => { router.terminate(); });
         <div class="session-stats" v-if="totalCount > 0">
           <div class="stat-pill">
             <span class="stat-val">{{ totalCount }}</span>
-            <span class="stat-key">FILES</span>
+            <span class="stat-key">{{ t('stats.files') }}</span>
           </div>
           <div class="stat-pill" v-if="doneCount > 0">
             <span class="stat-val accent">{{ doneCount }}</span>
-            <span class="stat-key">DONE</span>
+            <span class="stat-key">{{ t('stats.done') }}</span>
           </div>
           <div class="stat-pill" v-if="doneCount > 0">
             <span class="stat-val accent">{{ totalSavedMB.toFixed(0) }}</span>
-            <span class="stat-key">MB SAVED</span>
+            <span class="stat-key">{{ t('stats.saved') }}</span>
           </div>
         </div>
 
         <!-- Queue list -->
         <div class="queue-wrap">
           <div class="queue-header" v-if="totalCount > 0">
-            <span class="queue-label">QUEUE</span>
+            <span class="queue-label">{{ t('queue.header') }}</span>
             <div class="queue-badges">
               <span v-if="pendingCount > 0" class="q-badge pending">{{ pendingCount }} {{ t('queue.pending') }}</span>
             </div>
@@ -375,10 +375,10 @@ onUnmounted(() => { router.terminate(); });
                 </div>
               </div>
               <div class="qi-actions">
-                <button v-if="item.status === 'done'" class="qi-btn dl" @click.stop="downloadItem(item)" title="下载">
+                <button v-if="item.status === 'done'" class="qi-btn dl" @click.stop="downloadItem(item)" :title="t('queue.download')">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <button v-if="item.status !== 'processing'" class="qi-btn rm" @click.stop="removeItem(item.id)" title="移除">
+                <button v-if="item.status !== 'processing'" class="qi-btn rm" @click.stop="removeItem(item.id)" :title="t('queue.remove')">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                 </button>
               </div>
@@ -502,19 +502,19 @@ onUnmounted(() => { router.terminate(); });
             <div class="metrics-row">
               <div class="mc">
                 <span class="mc-val">{{ codec.toUpperCase() }}</span>
-                <span class="mc-unit">CODEC</span>
+                <span class="mc-unit">{{ t('metrics.codec') }}</span>
               </div>
               <div class="mc">
                 <span class="mc-val">CRF {{ crf }}</span>
-                <span class="mc-unit">QUALITY</span>
+                <span class="mc-unit">{{ t('metrics.quality') }}</span>
               </div>
               <div class="mc">
                 <span class="mc-val accent">{{ activeItem.throughput.toFixed(1) }}</span>
-                <span class="mc-unit">MB/s</span>
+                <span class="mc-unit">{{ t('metrics.throughput') }}</span>
               </div>
               <div class="mc">
                 <span class="mc-val">{{ fmtTime(activeItem.remaining) }}</span>
-                <span class="mc-unit">剩余时间</span>
+                <span class="mc-unit">{{ t('metrics.remaining') }}</span>
               </div>
             </div>
           </div>
@@ -551,7 +551,7 @@ onUnmounted(() => { router.terminate(); });
           <div class="sp-header">
             <div class="sp-title-row">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.8"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" stroke="currentColor" stroke-width="1.8"/></svg>
-              <span class="sp-title">COMPRESSION SETTINGS</span>
+              <span class="sp-title">{{ t('config.title') }}</span>
             </div>
             <button class="sp-close" @click="closeSettings">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
@@ -560,7 +560,7 @@ onUnmounted(() => { router.terminate(); });
 
           <!-- Codec -->
           <div class="sp-section">
-            <div class="sp-section-label">CODEC</div>
+            <div class="sp-section-label">{{ t('config.codec') }}</div>
             <div class="codec-cards">
               <button
                 v-for="opt in codecOptions"
@@ -617,11 +617,11 @@ onUnmounted(() => { router.terminate(); });
 
           <!-- Coming soon -->
           <div class="sp-coming-soon">
-            <div class="cs-label">COMING SOON</div>
+            <div class="cs-label">{{ t('config.comingSoon') }}</div>
             <div class="cs-slots">
-              <div class="cs-slot">Resolution Scale</div>
-              <div class="cs-slot">Audio Track</div>
-              <div class="cs-slot">Metadata Strip</div>
+              <div class="cs-slot">{{ t('config.resScale') }}</div>
+              <div class="cs-slot">{{ t('config.audioTrack') }}</div>
+              <div class="cs-slot">{{ t('config.metaStrip') }}</div>
             </div>
           </div>
 
@@ -646,8 +646,8 @@ onUnmounted(() => { router.terminate(); });
 .app-header { height: 50px; flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 0 var(--sp-lg); border-bottom: 1px solid var(--c-border); background: var(--c-bg-surface); z-index: 50; }
 .header-brand { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
 .brand-icon { width: 28px; height: 28px; border-radius: var(--r-sm); background: var(--c-accent); display: flex; align-items: center; justify-content: center; color: white; flex-shrink: 0; box-shadow: 0 0 12px rgba(249,115,22,0.4); }
-.brand-name { display: block; font-family: 'Space Grotesk', sans-serif; font-size: 0.82rem; font-weight: 700; letter-spacing: 0.06em; color: var(--c-text-primary); }
-.brand-sub { display: block; font-family: 'JetBrains Mono', monospace; font-size: 0.52rem; font-weight: 500; color: var(--c-text-muted); letter-spacing: 0.12em; }
+.brand-name { display: block; font-family: 'Space Grotesk', sans-serif; font-size: 1.05rem; font-weight: 700; letter-spacing: 0.02em; color: var(--c-text-primary); line-height: 1.2; }
+.brand-sub { display: block; font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; font-weight: 600; color: var(--c-text-muted); letter-spacing: 0.05em; line-height: 1.2; }
 
 .header-center { flex: 1; display: flex; align-items: center; justify-content: center; gap: 8px; min-width: 0; }
 .hc-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--c-accent); box-shadow: 0 0 6px var(--c-accent); animation: blink 1.2s ease-in-out infinite; flex-shrink: 0; }
