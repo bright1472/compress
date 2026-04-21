@@ -227,6 +227,14 @@ const processItem = async (item: QueueItem) => {
     item.elapsed = (Date.now() - item.startTime) / 1000;
     item.progress = 100;
     item.status = 'done';
+    
+    // ── Benchmark Logging ──────────────────────────────────────────
+    const originalMB = (item.file.size / 1048576).toFixed(2);
+    const compressedMB = (item.compressedSize / 1048576).toFixed(2);
+    const ratio = ((item.compressedSize / item.file.size) * 100).toFixed(1);
+    const avgSpeed = (item.file.size / 1048576 / item.elapsed).toFixed(2);
+    const logMsg = `[Benchmark] ${item.file.name} | ${originalMB}MB -> ${compressedMB}MB | ${item.elapsed.toFixed(1)}s | ${avgSpeed} MB/s | Ratio: ${ratio}% | Engine: ${item.engineUsed}`;
+    logger.info('system', logMsg);
   } catch (e: any) {
     item.status = 'error';
     item.errorMsg = e.message || t.value('process.encodingFailed');

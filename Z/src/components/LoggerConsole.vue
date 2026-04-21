@@ -9,10 +9,17 @@ const emit = defineEmits<{ (e: 'close'): void }>();
 const logs = ref<any[]>([]);
 const terminalRef = ref<HTMLElement | null>(null);
 const showErrorsOnly = ref(false);
+const showBenchmarksOnly = ref(false);
 
 const filteredLogs = computed(() => {
-  if (!showErrorsOnly.value) return logs.value;
-  return logs.value.filter(l => l.level === 'error');
+  let result = logs.value;
+  if (showErrorsOnly.value) {
+    result = result.filter(l => l.level === 'error');
+  }
+  if (showBenchmarksOnly.value) {
+    result = result.filter(l => l.message.includes('[Benchmark]'));
+  }
+  return result;
 });
 
 const updateLogs = () => {
@@ -51,9 +58,13 @@ const copyLog = (log: any) => {
           {{ t('console.title') }} <span class="paused-badge">{{ t('console.paused') }}</span>
         </div>
         <div class="logger-actions">
-          <label class="error-filter">
+          <label class="filter-item error">
             <input type="checkbox" v-model="showErrorsOnly">
             <span class="filter-label">{{ t('console.errorsOnly') }}</span>
+          </label>
+          <label class="filter-item benchmark">
+            <input type="checkbox" v-model="showBenchmarksOnly">
+            <span class="filter-label">{{ t('console.benchmarksOnly') }}</span>
           </label>
           <button class="logger-btn refresh-btn" @click="updateLogs" :title="t('console.refresh')">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -84,9 +95,11 @@ const copyLog = (log: any) => {
 .logger-btn { background: none; border: none; color: #888; cursor: pointer; padding: 4px; border-radius: 4px; display: flex; align-items: center; justify-content: center; }
 .logger-btn:hover { background: #333; color: #fff; }
 
-.error-filter { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 4px 8px; border-radius: 4px; border: 1px solid #333; background: #1e1e1e; transition: all 0.2s; }
-.error-filter:hover { background: #333; }
-.error-filter input { width: 12px; height: 12px; accent-color: #f48771; cursor: pointer; }
+.error-filter, .filter-item { display: flex; align-items: center; gap: 6px; cursor: pointer; padding: 4px 8px; border-radius: 4px; border: 1px solid #333; background: #1e1e1e; transition: all 0.2; }
+.error-filter:hover, .filter-item:hover { background: #333; }
+.filter-item input { width: 12px; height: 12px; cursor: pointer; }
+.filter-item.error input { accent-color: #f48771; }
+.filter-item.benchmark input { accent-color: #569cd6; }
 .filter-label { font-size: 0.65rem; color: #aaa; font-weight: 500; user-select: none; }
 
 .logger-body { flex: 1; overflow-y: auto; padding: 10px; background: #1e1e1e; font-size: 0.75rem; color: #ccc; scrollbar-width: thin; scrollbar-color: #444 transparent; }
