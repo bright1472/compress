@@ -291,12 +291,6 @@ onUnmounted(() => { router.terminate(); });
 
         <div class="hdr-divider"></div>
 
-        <span class="header-badge">WebCodecs</span>
-        <span class="header-badge accent-badge">10GB+</span>
-
-        <div class="hdr-divider"></div>
-
-        <!-- Theme toggle -->
         <button class="theme-switch" @click="toggleTheme" :title="isDark ? t('nav.toggleLight') : t('nav.toggleDark')">
           <div class="ts-track" :class="{ light: !isDark }">
             <div class="ts-thumb" :class="{ light: !isDark }">
@@ -442,6 +436,40 @@ onUnmounted(() => { router.terminate(); });
             <div class="drop-formats">
               <span v-for="f in ['MP4','MOV','MKV','AVI','WebM','FLV','WMV']" :key="f" class="fmt-tag">{{ f }}</span>
             </div>
+
+            <!-- New Feature Highlights -->
+            <div class="drop-features">
+              <div class="feat-card">
+                <div class="feat-icon-sm gpu">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/></svg>
+                </div>
+                <div class="feat-txt">
+                  <div class="feat-title">{{ t('features.gpu.title') }}</div>
+                  <div class="feat-desc">{{ t('features.gpu.desc') }}</div>
+                </div>
+              </div>
+              <div class="feat-divider"></div>
+              <div class="feat-card">
+                <div class="feat-icon-sm size">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <div class="feat-txt">
+                  <div class="feat-title">{{ t('features.size.title') }}</div>
+                  <div class="feat-desc">{{ t('features.size.desc') }}</div>
+                </div>
+              </div>
+              <div class="feat-divider"></div>
+              <div class="feat-card">
+                <div class="feat-icon-sm privacy">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                </div>
+                <div class="feat-txt">
+                  <div class="feat-title">{{ t('features.privacy.title') }}</div>
+                  <div class="feat-desc">{{ t('features.privacy.desc') }}</div>
+                </div>
+              </div>
+            </div>
+
             <button class="btn-ghost" @click.stop="fileInputRef?.click()">{{ t('process.orClick') }}</button>
           </div>
         </div>
@@ -809,10 +837,22 @@ onUnmounted(() => { router.terminate(); });
 .drop-zone:hover .drop-ring { border-color: rgba(249,115,22,0.9); box-shadow: 0 0 28px rgba(249,115,22,0.45), 0 0 8px rgba(249,115,22,0.3); }
 .drop-title { font-family: 'Space Grotesk', sans-serif; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; color: var(--c-text-primary); }
 .drop-sub { font-size: 0.83rem; color: var(--c-text-secondary); max-width: 380px; line-height: 1.6; }
-.drop-formats { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; }
+.drop-formats { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; margin-bottom: var(--sp-sm); }
 .fmt-tag { font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; font-weight: 700; padding: 3px 8px; border-radius: var(--r-sm); background: var(--c-bg-elevated); border: 1px solid var(--c-border); color: var(--c-text-muted); letter-spacing: 0.05em; transition: all var(--dur-fast); }
 .drop-zone:hover .fmt-tag, .drop-zone.dragging .fmt-tag { border-color: var(--c-border-accent); color: var(--c-text-accent); background: var(--c-accent-subtle); }
-.btn-ghost { display: inline-flex; align-items: center; gap: 6px; padding: 9px 20px; border-radius: var(--r-full); background: var(--c-bg-overlay); border: 1px solid var(--c-border-strong); color: var(--c-text-secondary); font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all var(--dur-normal); }
+
+.drop-features { display: flex; align-items: center; gap: 12px; margin-top: var(--sp-md); padding: 12px 24px; background: var(--c-bg-overlay); backdrop-filter: blur(12px); border: 0.5px solid var(--c-border-strong); border-radius: var(--r-lg); box-shadow: 0 4px 20px rgba(0,0,0,0.03), 0 0 1px rgba(0,0,0,0.05); }
+.feat-card { display: flex; align-items: center; gap: 10px; text-align: left; }
+.feat-icon-sm { width: 28px; height: 28px; border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; background: var(--c-bg-elevated); border: 0.5px solid var(--c-border); }
+.feat-icon-sm.gpu { color: #f59e0b; background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.2); }
+.feat-icon-sm.size { color: #3b82f6; background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.2); }
+.feat-icon-sm.privacy { color: #10b981; background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.2); }
+.feat-txt { display: flex; flex-direction: column; }
+.feat-title { font-size: 0.75rem; font-weight: 700; color: var(--c-text-primary); letter-spacing: -0.01em; }
+.feat-desc { font-size: 0.6rem; font-weight: 500; color: var(--c-text-muted); margin-top: 1px; }
+.feat-divider { width: 1px; height: 24px; background: var(--c-border); opacity: 0.6; }
+
+.btn-ghost { display: inline-flex; align-items: center; gap: 6px; padding: 10px 24px; border-radius: var(--r-full); background: var(--c-bg-overlay); border: 1px solid var(--c-border-strong); color: var(--c-text-secondary); font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all var(--dur-normal); margin-top: var(--sp-sm); }
 .btn-ghost:hover { background: var(--c-accent-subtle); border-color: var(--c-border-accent); color: var(--c-text-accent); }
 
 /* Drag Overlay — full bleed, no radius */

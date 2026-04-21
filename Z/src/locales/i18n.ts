@@ -14,6 +14,11 @@ export const zh = {
     toggleLight: '切换亮色',
     toggleDark: '切换暗色',
   },
+  features: {
+    gpu: { title: 'GPU 硬件加速', desc: '原生级转码速度' },
+    size: { title: '10GB+ 超大文件', desc: '突破浏览器上限' },
+    privacy: { title: '100% 隐私安全', desc: '数据不经过服务器' },
+  },
   stats: {
     files: '文件',
     done: '已完成',
@@ -114,6 +119,11 @@ export const en = {
     settings: 'Compression Settings',
     toggleLight: 'Switch to Light Mode',
     toggleDark: 'Switch to Dark Mode',
+  },
+  features: {
+    gpu: { title: 'GPU Accelerated', desc: 'Native transcoding speed' },
+    size: { title: '10GB+ Capability', desc: 'Beyond browser limits' },
+    privacy: { title: '100% Private', desc: 'No server side processing' },
   },
   stats: {
     files: 'FILES',
