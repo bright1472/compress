@@ -470,7 +470,7 @@ onUnmounted(() => { router.terminate(); });
               </div>
             </div>
 
-            <button class="btn-ghost" @click.stop="fileInputRef?.click()">{{ t('process.orClick') }}</button>
+            <button v-if="false" class="btn-ghost" @click.stop="fileInputRef?.click()">{{ t('process.orClick') }}</button>
           </div>
         </div>
 
@@ -829,28 +829,28 @@ onUnmounted(() => { router.terminate(); });
   animation: dz-breathe 1.4s ease-in-out infinite;
 }
 
-.drop-content { display: flex; flex-direction: column; align-items: center; gap: var(--sp-md); text-align: center; padding: var(--sp-2xl); pointer-events: none; position: relative; z-index: 1; }
+.drop-content { display: flex; flex-direction: column; align-items: center; gap: var(--sp-xl); text-align: center; padding: var(--sp-3xl); pointer-events: none; position: relative; z-index: 1; }
 .drop-zone .btn-ghost { pointer-events: all; }
-.drop-icon-wrap { position: relative; width: 88px; height: 88px; display: flex; align-items: center; justify-content: center; color: var(--c-accent); }
-.drop-ring-outer { position: absolute; inset: -18px; border-radius: 50%; border: 1px solid rgba(249,115,22,0.18); animation: pulse-ring 3.8s ease-in-out infinite reverse; }
-.drop-ring { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid rgba(249,115,22,0.55); animation: pulse-ring 2.4s ease-in-out infinite; box-shadow: 0 0 18px rgba(249,115,22,0.18); }
-.drop-zone:hover .drop-ring { border-color: rgba(249,115,22,0.9); box-shadow: 0 0 28px rgba(249,115,22,0.45), 0 0 8px rgba(249,115,22,0.3); }
-.drop-title { font-family: 'Space Grotesk', sans-serif; font-size: 1.4rem; font-weight: 700; letter-spacing: -0.02em; color: var(--c-text-primary); }
-.drop-sub { font-size: 0.83rem; color: var(--c-text-secondary); max-width: 380px; line-height: 1.6; }
-.drop-formats { display: flex; gap: 5px; flex-wrap: wrap; justify-content: center; margin-bottom: var(--sp-sm); }
-.fmt-tag { font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; font-weight: 700; padding: 3px 8px; border-radius: var(--r-sm); background: var(--c-bg-elevated); border: 1px solid var(--c-border); color: var(--c-text-muted); letter-spacing: 0.05em; transition: all var(--dur-fast); }
+.drop-icon-wrap { position: relative; width: 132px; height: 132px; display: flex; align-items: center; justify-content: center; color: var(--c-accent); margin-bottom: 10px; }
+.drop-ring-outer { position: absolute; inset: -32px; border-radius: 50%; border: 1px solid rgba(249,115,22,0.12); animation: pulse-ring 4.2s ease-in-out infinite reverse; }
+.drop-ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid rgba(249,115,22,0.6); animation: pulse-ring 2.8s ease-in-out infinite; box-shadow: 0 0 24px rgba(249,115,22,0.2); }
+.drop-zone:hover .drop-ring { border-color: rgba(249,115,22,1); box-shadow: 0 0 42px rgba(249,115,22,0.5), 0 0 12px rgba(249,115,22,0.3); }
+.drop-title { font-family: 'Space Grotesk', sans-serif; font-size: 2.4rem; font-weight: 700; letter-spacing: -0.04em; color: var(--c-text-primary); line-height: 1.1; }
+.drop-sub { font-size: 0.95rem; color: var(--c-text-secondary); max-width: 520px; line-height: 1.6; }
+.drop-formats { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: var(--sp-md); }
+.fmt-tag { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; font-weight: 700; padding: 4px 12px; border-radius: var(--r-sm); background: var(--c-bg-elevated); border: 1px solid var(--c-border); color: var(--c-text-muted); letter-spacing: 0.05em; transition: all var(--dur-fast); }
 .drop-zone:hover .fmt-tag, .drop-zone.dragging .fmt-tag { border-color: var(--c-border-accent); color: var(--c-text-accent); background: var(--c-accent-subtle); }
 
-.drop-features { display: flex; align-items: center; gap: 12px; margin-top: var(--sp-md); padding: 12px 24px; background: var(--c-bg-overlay); backdrop-filter: blur(12px); border: 0.5px solid var(--c-border-strong); border-radius: var(--r-lg); box-shadow: 0 4px 20px rgba(0,0,0,0.03), 0 0 1px rgba(0,0,0,0.05); }
-.feat-card { display: flex; align-items: center; gap: 10px; text-align: left; }
-.feat-icon-sm { width: 28px; height: 28px; border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; background: var(--c-bg-elevated); border: 0.5px solid var(--c-border); }
+.drop-features { display: flex; align-items: center; gap: 24px; margin-top: var(--sp-lg); padding: 16px 36px; background: var(--c-bg-overlay); backdrop-filter: blur(20px); border: 0.5px solid var(--c-border-strong); border-radius: 50px; box-shadow: 0 10px 40px rgba(0,0,0,0.04), 0 0 1px rgba(0,0,0,0.08); }
+.feat-card { display: flex; align-items: center; gap: 14px; text-align: left; }
+.feat-icon-sm { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: var(--c-bg-elevated); border: 0.5px solid var(--c-border); }
 .feat-icon-sm.gpu { color: #f59e0b; background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.2); }
 .feat-icon-sm.size { color: #3b82f6; background: rgba(59,130,246,0.08); border-color: rgba(59,130,246,0.2); }
 .feat-icon-sm.privacy { color: #10b981; background: rgba(16,185,129,0.08); border-color: rgba(16,185,129,0.2); }
 .feat-txt { display: flex; flex-direction: column; }
-.feat-title { font-size: 0.75rem; font-weight: 700; color: var(--c-text-primary); letter-spacing: -0.01em; }
-.feat-desc { font-size: 0.6rem; font-weight: 500; color: var(--c-text-muted); margin-top: 1px; }
-.feat-divider { width: 1px; height: 24px; background: var(--c-border); opacity: 0.6; }
+.feat-title { font-size: 0.85rem; font-weight: 700; color: var(--c-text-primary); letter-spacing: -0.01em; }
+.feat-desc { font-size: 0.65rem; font-weight: 500; color: var(--c-text-muted); margin-top: 2px; }
+.feat-divider { width: 1px; height: 32px; background: var(--c-border); opacity: 0.5; }
 
 .btn-ghost { display: inline-flex; align-items: center; gap: 6px; padding: 10px 24px; border-radius: var(--r-full); background: var(--c-bg-overlay); border: 1px solid var(--c-border-strong); color: var(--c-text-secondary); font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all var(--dur-normal); margin-top: var(--sp-sm); }
 .btn-ghost:hover { background: var(--c-accent-subtle); border-color: var(--c-border-accent); color: var(--c-text-accent); }
