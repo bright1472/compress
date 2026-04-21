@@ -22,8 +22,20 @@ const closeSettings = () => { showSettings.value = false; };
 const onKeydown = (e: KeyboardEvent) => {
   if (e.key === 'Escape') { showSettings.value = false; showLogger.value = false; }
 };
-onMounted(() => document.addEventListener('keydown', onKeydown));
-onUnmounted(() => document.removeEventListener('keydown', onKeydown));
+const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+  if (queue.value.length > 0) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+};
+onMounted(() => {
+  document.addEventListener('keydown', onKeydown);
+  window.addEventListener('beforeunload', handleBeforeUnload);
+});
+onUnmounted(() => {
+  document.removeEventListener('keydown', onKeydown);
+  window.removeEventListener('beforeunload', handleBeforeUnload);
+});
 
 // ── Queue Types ───────────────────────────────────────────────────
 interface QueueItem {
@@ -526,7 +538,8 @@ onUnmounted(() => { router.terminate(); });
         <div v-if="activeItem && (activeItem.status === 'pending' || activeItem.status === 'processing')" class="preview-stage" :class="{ 'is-processing': activeItem.status === 'processing' }">
           <video :src="activeItem.originalUrl" class="preview-video" controls muted loop autoplay></video>
           
-          <!-- Minimal Processing Overlay -->
+          <!-- Minimal Processing Overlay (Hidden for now) -->
+          <!-- 
           <div v-if="activeItem.status === 'processing'" class="proc-overlay">
             <div class="proc-top-bar">
               <div class="proc-top-fill" :style="{ width: activeItem.progress + '%' }"></div>
@@ -536,6 +549,7 @@ onUnmounted(() => { router.terminate(); });
               <span class="psb-info">{{ activeItem.throughput.toFixed(1) }} MB/s · {{ fmtTime(activeItem.remaining) }}</span>
             </div>
           </div>
+          -->
 
           <div v-if="activeItem.status === 'pending'" class="preview-tip">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><path d="M12 8v4l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
@@ -677,7 +691,7 @@ onUnmounted(() => { router.terminate(); });
 .hc-label { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; font-weight: 700; letter-spacing: 0.1em; color: var(--c-accent); }
 .hc-file { font-size: 0.73rem; color: var(--c-text-secondary); max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: 'JetBrains Mono', monospace; }
 .hc-sep { color: var(--c-text-muted); font-size: 0.6rem; }
-.hc-rate, .hc-prog { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 600; color: var(--c-text-primary); }
+.hc-rate, .hc-prog { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 700; color: var(--c-accent); }
 
 .header-right { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }
 .hdr-divider { width: 1px; height: 16px; background: var(--c-border); margin: 0 2px; }
