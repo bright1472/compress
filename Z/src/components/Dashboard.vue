@@ -315,27 +315,18 @@ onUnmounted(() => { router.terminate(); });
       <aside v-if="totalCount > 0" class="sidebar">
 
         <!-- Session stats bar -->
-        <div class="session-stats" v-if="totalCount > 0">
-          <div class="stat-pill">
-            <span class="stat-val">{{ totalCount }}</span>
-            <span class="stat-key">{{ t('stats.files') }}</span>
-          </div>
-          <div class="stat-pill" v-if="doneCount > 0">
-            <span class="stat-val accent">{{ doneCount }}</span>
-            <span class="stat-key">{{ t('stats.done') }}</span>
-          </div>
-          <div class="stat-pill" v-if="doneCount > 0">
-            <span class="stat-val accent">{{ totalSavedMB.toFixed(0) }}</span>
-            <span class="stat-key">{{ t('stats.saved') }}</span>
-          </div>
-        </div>
+        <!-- Stats block removed as requested -->
+
 
         <!-- Queue list -->
         <div class="queue-wrap">
           <div class="queue-header" v-if="totalCount > 0">
-            <span class="queue-label">{{ t('queue.header') }}</span>
-            <div class="queue-badges">
-              <span v-if="pendingCount > 0" class="q-badge pending">{{ pendingCount }} {{ t('queue.pending') }}</span>
+            <div class="qh-left">
+              <span class="queue-label">{{ t('queue.header') }}</span>
+              <span class="qh-count">{{ doneCount }}/{{ totalCount }}</span>
+            </div>
+            <div class="qh-right" v-if="doneCount > 0">
+              <span class="qh-saved-pill">↓ {{ totalSavedMB.toFixed(1) }} MB</span>
             </div>
           </div>
 
@@ -353,15 +344,21 @@ onUnmounted(() => { router.terminate(); });
                 </p>
                 <div class="qi-meta">
                   <template v-if="item.status === 'done'">
-                    <span>{{ fileSizeMB(item.file.size) }}</span>
-                    <span class="qi-arrow">→</span>
-                    <span class="qi-size-comp">{{ fileSizeMB(item.compressedSize) }} MB</span>
-                    <span class="qi-ratio">↓{{ compressionRatio(item) }}%</span>
-                    <span v-if="item.elapsedSec" class="qi-time">{{ item.elapsedSec }}s</span>
+                    <span class="m-capsule size-group">
+                      <span class="src-val">{{ fileSizeMB(item.file.size) }}</span>
+                      <span class="size-arrow">→</span>
+                      <span class="res-val">{{ fileSizeMB(item.compressedSize) }} MB</span>
+                    </span>
+                    <span class="m-capsule ratio">↓{{ compressionRatio(item) }}%</span>
+                    <span class="m-capsule time">{{ fmtTime(item.elapsed) }}</span>
+                  </template>
+                  <template v-else-if="item.status === 'processing'">
+                    <span class="m-capsule src">{{ fileSizeMB(item.file.size) }} MB</span>
+                    <span class="m-capsule time">{{ fmtTime(item.elapsed) }}</span>
                   </template>
                   <template v-else>
-                    <span>{{ fileSizeMB(item.file.size) }} MB</span>
-                    <span v-if="item.status === 'error'" class="qi-err">ERR</span>
+                    <span class="m-capsule src">{{ fileSizeMB(item.file.size) }} MB</span>
+                    <span v-if="item.status === 'error'" class="m-capsule err">ERR</span>
                   </template>
                 </div>
                 <div v-if="item.status === 'processing'" class="qi-progress-bar">
@@ -709,23 +706,19 @@ onUnmounted(() => { router.terminate(); });
 /* ── Sidebar ────────────────────────────────────────────────────── */
 .sidebar { width: 272px; flex-shrink: 0; display: flex; flex-direction: column; border-right: 1px solid var(--c-border); background: var(--c-bg-surface); }
 
-/* Session stats */
-.session-stats { display: flex; gap: 6px; padding: var(--sp-md) var(--sp-md) var(--sp-sm); flex-shrink: 0; }
-.stat-pill { display: flex; flex-direction: column; align-items: center; gap: 1px; padding: 6px 12px; border-radius: var(--r-sm); background: var(--c-bg-elevated); border: 1px solid var(--c-border); flex: 1; }
-.stat-val { font-family: 'JetBrains Mono', monospace; font-size: 1rem; font-weight: 700; color: var(--c-text-primary); line-height: 1; }
-.stat-val.accent { color: var(--c-accent); }
-.stat-key { font-family: 'JetBrains Mono', monospace; font-size: 0.5rem; font-weight: 700; letter-spacing: 0.1em; color: var(--c-text-muted); }
+/* Session stats removed */
+
 
 /* Queue wrap */
 .queue-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; padding: 0 var(--sp-sm) var(--sp-sm); overflow: hidden; }
-.queue-header { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-sm) var(--sp-sm) 6px; flex-shrink: 0; }
-.queue-label { font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.12em; color: var(--c-text-muted); }
-.queue-badges { display: flex; gap: 4px; }
-.q-badge { font-size: 0.58rem; font-weight: 700; padding: 2px 7px; border-radius: var(--r-full); font-family: 'JetBrains Mono', monospace; }
-.q-badge.pending { background: var(--c-bg-elevated); color: var(--c-text-muted); border: 1px solid var(--c-border); }
+.queue-header { display: flex; align-items: center; justify-content: space-between; padding: var(--sp-md) var(--sp-sm) 8px; flex-shrink: 0; }
+.qh-left { display: flex; align-items: baseline; gap: 6px; }
+.queue-label { font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.12em; color: var(--c-text-muted); text-transform: uppercase; }
+.qh-count { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; font-weight: 700; color: var(--c-text-muted); opacity: 0.7; }
+.qh-saved-pill { font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; font-weight: 700; color: var(--c-success); background: rgba(34,197,94,0.08); padding: 2px 8px; border-radius: var(--r-full); border: 0.5px solid rgba(34,197,94,0.2); }
 
-.queue-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 3px; scrollbar-width: thin; scrollbar-color: var(--c-bg-elevated) transparent; }
-.queue-item { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-radius: var(--r-md); border: 1px solid var(--c-border); background: var(--c-bg-overlay); cursor: pointer; transition: all var(--dur-fast) var(--ease-out); flex-shrink: 0; }
+.queue-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; scrollbar-width: thin; scrollbar-color: var(--c-bg-elevated) transparent; }
+.queue-item { position: relative; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border-radius: var(--r-md); border: 1px solid var(--c-border); background: var(--c-bg-overlay); cursor: pointer; transition: all var(--dur-fast) var(--ease-out); flex-shrink: 0; }
 .queue-item:hover { background: var(--c-bg-hover); border-color: var(--c-border-strong); }
 .queue-item.active { background: var(--c-accent-subtle); border-color: var(--c-border-accent); }
 
@@ -737,17 +730,23 @@ onUnmounted(() => { router.terminate(); });
 
 .qi-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .qi-name { font-size: 0.73rem; font-weight: 600; color: var(--c-text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.qi-meta { display: flex; gap: 5px; align-items: center; font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; color: var(--c-text-muted); flex-wrap: wrap; }
-.qi-arrow { color: var(--c-text-muted); }
-.qi-size-comp { color: var(--c-success); font-weight: 600; }
-.qi-ratio { color: var(--c-accent); font-weight: 700; }
-.qi-time { color: var(--c-text-muted); }
-.qi-err { color: var(--c-danger); font-weight: 700; }
+.qi-meta { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 2px; }
+.m-capsule { font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; font-weight: 600; padding: 2px 6px; border-radius: 4px; border: 0.5px solid var(--c-border); display: inline-flex; align-items: center; white-space: nowrap; line-height: 1; }
+.m-capsule.src { background: rgba(59,130,246,0.08); color: #3b82f6; border-color: rgba(59,130,246,0.2); }
+.m-capsule.res { background: rgba(34,197,94,0.08); color: #22c55e; border-color: rgba(34,197,94,0.2); }
+.m-capsule.ratio { background: rgba(249,115,22,0.08); color: #f97316; border-color: rgba(249,115,22,0.2); }
+.m-capsule.time { background: var(--c-bg-elevated); color: var(--c-text-muted); opacity: 0.9; }
+.m-capsule.err { background: rgba(239, 68, 68, 0.08); color: #ef4444; border-color: rgba(239, 68, 68, 0.2); }
+.m-capsule.size-group { gap: 4px; padding: 2px 8px; background: var(--c-bg-elevated); border-color: var(--c-border); }
+.src-val { color: #3b82f6; }
+.res-val { color: #22c55e; }
+.size-arrow { color: #22c55e; font-size: 0.6rem; font-weight: 800; margin: 0 1px; }
 .qi-progress-bar { height: 2px; background: var(--c-bg-elevated); border-radius: 2px; overflow: hidden; margin-top: 2px; }
 .qi-progress-fill { height: 100%; background: var(--c-accent); border-radius: 2px; transition: width 0.3s var(--ease-out); }
 
-.qi-actions { display: flex; gap: 2px; flex-shrink: 0; }
-.qi-btn { width: 22px; height: 22px; border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; background: none; transition: all var(--dur-fast); }
+.qi-actions { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; flex-shrink: 0; opacity: 0; transition: all var(--dur-fast); pointer-events: none; z-index: 10; padding: 4px; border-radius: var(--r-sm); background: var(--c-bg-surface); backdrop-filter: blur(10px); border: 0.5px solid var(--c-border); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+.queue-item:hover .qi-actions { opacity: 1; pointer-events: all; }
+.qi-btn { width: 24px; height: 24px; border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; background: none; transition: all var(--dur-fast); }
 .qi-btn.dl { color: var(--c-text-muted); }
 .qi-btn.dl:hover { background: var(--c-accent-subtle); color: var(--c-accent); }
 .qi-btn.rm { color: var(--c-text-muted); }

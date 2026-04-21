@@ -135,7 +135,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped>
-.cs-root { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 16px; cursor: col-resize; user-select: none; background: #000; flex: 1; }
+.cs-root { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 0; cursor: col-resize; user-select: none; background: #000; flex: 1; }
 .cs-layer { position: absolute; inset: 0; }
 .cs-top { z-index: 2; }
 .cs-video { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
