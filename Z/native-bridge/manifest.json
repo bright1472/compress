@@ -1,0 +1,19 @@
+{
+  "name": "Titan 极速视频压缩",
+  "version": "1.0.0",
+  "manifest_version": 3,
+  "description": "GPU 硬件加速视频压缩引擎 — 本地原生编码",
+  "permissions": ["nativeMessaging", "storage"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "extension-page.html",
+    "default_icon": {
+      "128": "icons/icon-128.png"
+    }
+  },
+  "icons": {
+    "128": "icons/icon-128.png"
+  }
+}

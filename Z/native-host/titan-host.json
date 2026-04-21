@@ -1,0 +1,9 @@
+{
+  "name": "com.titan.video.host",
+  "description": "Titan GPU-accelerated video compression native host",
+  "path": "PLACEHOLDER_PATH",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://PLACEHOLDER_EXTENSION_ID/"
+  ]
+}

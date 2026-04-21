@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Titan 极速模式</title>
+  <link rel="stylesheet" href="extension-page.css">
+</head>
+<body>
+  <div class="app">
+    <!-- Header -->
+    <header class="header">
+      <h1>Titan 极速模式</h1>
+      <span id="encoderBadge" class="encoder-badge">检测中...</span>
+    </header>
+
+    <!-- 目录选择 -->
+    <section class="dir-selector">
+      <div class="dir-row">
+        <label>输入目录</label>
+        <input type="text" id="inputDir" readonly placeholder="选择包含视频的文件夹">
+        <button class="btn btn-sm" id="pickInputDir">📂 选择</button>
+      </div>
+      <div class="dir-row">
+        <label>输出目录</label>
+        <input type="text" id="outputDir" readonly placeholder="选择输出文件夹（留空则同输入）">
+        <button class="btn btn-sm" id="pickOutputDir">📂 选择</button>
+      </div>
+    </section>
+
+    <!-- 编码参数 -->
+    <section class="settings">
+      <div class="setting-row">
+        <label>编码</label>
+        <select id="codec">
+          <option value="h264">H.264 (AVC)</option>
+          <option value="h265">H.265 (HEVC)</option>
+          <option value="av1">AV1</option>
+        </select>
+      </div>
+      <div class="setting-row">
+        <label>质量 (CRF)</label>
+        <input type="number" id="crf" value="28" min="18" max="40" class="num-input">
+      </div>
+      <div class="setting-row">
+        <label>速度预设</label>
+        <select id="preset">
+          <option value="p1">最快 (p1)</option>
+          <option value="p2">p2</option>
+          <option value="p3">p3</option>
+          <option value="p4" selected>平衡 (p4)</option>
+          <option value="p5">p5</option>
+          <option value="p6">p6</option>
+          <option value="p7">最慢/最高质量 (p7)</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- 文件列表 -->
+    <section class="file-list">
+      <div class="file-list-header">
+        <span>文件列表</span>
+        <span id="fileCount" class="count">0 个文件</span>
+      </div>
+      <div id="fileQueue" class="queue">
+        <div class="empty">请先选择输入目录</div>
+      </div>
+    </section>
+
+    <!-- 操作按钮 -->
+    <section class="actions">
+      <button class="btn btn-primary" id="startBtn" disabled>开始压缩</button>
+      <button class="btn btn-secondary" id="openDirBtn" disabled>📁 打开输出目录</button>
+    </section>
+
+    <!-- 状态栏 -->
+    <footer id="statusBar" class="status-bar">就绪</footer>
+  </div>
+
+  <script src="extension-page.js"></script>
+</body>
+</html>

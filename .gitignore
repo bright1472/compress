@@ -1,0 +1,29 @@
+# ---- Rust Native Host ----
+Z/native-host/target/
+Z/native-host/Cargo.lock
+
+# ---- Node / Frontend ----
+node_modules/
+Z/dist/
+Z/.vite/
+
+# ---- IDE ----
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ---- OS ----
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- Claude Code ----
+.claude/
+memory/
+
+# ---- Misc ----
+*.log
+.env
+.env.local
