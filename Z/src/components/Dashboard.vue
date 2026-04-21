@@ -67,8 +67,16 @@ const crf = ref<number>(
 const preset = ref<'ultrafast' | 'fast' | 'medium' | 'slow'>(
   VALID_PRESETS.has(_savedSettings?.preset) ? _savedSettings.preset : 'fast'
 );
-watch([codec, crf, preset], () => {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify({ codec: codec.value, crf: crf.value, preset: preset.value }));
+const showLoggerEnabled = ref<boolean>(
+  typeof _savedSettings?.showLoggerEnabled === 'boolean' ? _savedSettings.showLoggerEnabled : false
+);
+watch([codec, crf, preset, showLoggerEnabled], () => {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify({
+    codec: codec.value,
+    crf: crf.value,
+    preset: preset.value,
+    showLoggerEnabled: showLoggerEnabled.value
+  }));
 });
 
 const codecOptions = [
@@ -297,7 +305,7 @@ onUnmounted(() => { router.terminate(); });
 
       <div class="header-right">
         <!-- Utility buttons -->
-        <button class="hdr-icon-btn" @click="openDiagnosticLogs" :title="t('nav.diagnostic')">
+        <button v-if="showLoggerEnabled" class="hdr-icon-btn" :class="{ active: showLogger }" @click="openDiagnosticLogs" :title="t('nav.diagnostic')">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 17l6-6-6-6m8 14h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <button class="hdr-icon-btn" @click="openSettings" :title="t('nav.settings')" :class="{ active: showSettings }">
@@ -506,57 +514,24 @@ onUnmounted(() => { router.terminate(); });
           <p>{{ t('process.clickToPreview') }}</p>
         </div>
 
-        <!-- Pending: preview original -->
-        <div v-if="activeItem && activeItem.status === 'pending'" class="preview-stage">
+        <!-- Pending & Processing: Visual focus on video -->
+        <div v-if="activeItem && (activeItem.status === 'pending' || activeItem.status === 'processing')" class="preview-stage" :class="{ 'is-processing': activeItem.status === 'processing' }">
           <video :src="activeItem.originalUrl" class="preview-video" controls muted loop autoplay></video>
-          <div class="preview-tip">
+          
+          <!-- Minimal Processing Overlay -->
+          <div v-if="activeItem.status === 'processing'" class="proc-overlay">
+            <div class="proc-top-bar">
+              <div class="proc-top-fill" :style="{ width: activeItem.progress + '%' }"></div>
+            </div>
+            <div class="proc-status-badge">
+              <span class="psb-pct">{{ activeItem.progress.toFixed(1) }}%</span>
+              <span class="psb-info">{{ activeItem.throughput.toFixed(1) }} MB/s · {{ fmtTime(activeItem.remaining) }}</span>
+            </div>
+          </div>
+
+          <div v-if="activeItem.status === 'pending'" class="preview-tip">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><path d="M12 8v4l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
             {{ t('process.configAndStart') }}
-          </div>
-        </div>
-
-        <!-- Processing -->
-        <div v-if="activeItem && activeItem.status === 'processing'" class="processing-stage">
-          <div class="proc-center">
-            <div class="proc-ring-outer">
-              <div class="proc-ring-inner">
-                <svg class="proc-spin" width="28" height="28" viewBox="0 0 24 24" fill="none"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-              </div>
-            </div>
-            <div class="proc-info">
-              <h2 class="proc-title">{{ engineLoading ? t('process.loadingEngine') : t('process.compressing') }}</h2>
-              <p class="proc-file">{{ activeItem.file.name }}</p>
-              <p class="proc-queue-hint" v-if="pendingCount > 0">{{ t('process.filesInQueue', { n: pendingCount }) }}</p>
-            </div>
-            <div class="prog-wrap">
-              <div class="prog-track">
-                <div class="prog-fill" :style="{ width: activeItem.progress + '%' }">
-                  <div class="prog-shine"></div>
-                </div>
-              </div>
-              <div class="prog-labels">
-                <span class="prog-pct">{{ activeItem.progress.toFixed(1) }}%</span>
-                <span class="prog-rate">{{ activeItem.throughput.toFixed(1) }} MB/s</span>
-              </div>
-            </div>
-            <div class="metrics-row">
-              <div class="mc">
-                <span class="mc-val">{{ codec.toUpperCase() }}</span>
-                <span class="mc-unit">{{ t('metrics.codec') }}</span>
-              </div>
-              <div class="mc">
-                <span class="mc-val">CRF {{ crf }}</span>
-                <span class="mc-unit">{{ t('metrics.quality') }}</span>
-              </div>
-              <div class="mc">
-                <span class="mc-val accent">{{ activeItem.throughput.toFixed(1) }}</span>
-                <span class="mc-unit">{{ t('metrics.throughput') }}</span>
-              </div>
-              <div class="mc">
-                <span class="mc-val">{{ fmtTime(activeItem.remaining) }}</span>
-                <span class="mc-unit">{{ t('metrics.remaining') }}</span>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -655,15 +630,15 @@ onUnmounted(() => { router.terminate(); });
             </div>
           </div>
 
-          <!-- Coming soon -->
-          <div class="sp-coming-soon">
-            <div class="cs-label">{{ t('config.comingSoon') }}</div>
-            <div class="cs-slots">
-              <div class="cs-slot">{{ t('config.resScale') }}</div>
-              <div class="cs-slot">{{ t('config.audioTrack') }}</div>
-              <div class="cs-slot">{{ t('config.metaStrip') }}</div>
+          <!-- System -->
+          <div class="sp-section">
+            <div class="sp-section-label">{{ t('config.showLogger') }}</div>
+            <div class="sp-opt-row">
+              <span class="sp-opt-label">Diagnostic Console</span>
+              <button class="sp-toggle" :class="{ active: showLoggerEnabled }" @click="showLoggerEnabled = !showLoggerEnabled"></button>
             </div>
           </div>
+
 
         </div>
       </div>
@@ -899,23 +874,22 @@ onUnmounted(() => { router.terminate(); });
 /* Stage Hint */
 .stage-hint { flex: 1; display: flex; align-items: center; justify-content: center; color: var(--c-text-muted); font-size: 0.82rem; }
 
-/* Preview Stage */
-.preview-stage { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: var(--sp-lg); overflow: hidden; }
-.preview-video { flex: 1; width: 100%; min-height: 0; object-fit: contain; background: #000; }
-.preview-tip { display: flex; align-items: center; gap: 6px; justify-content: center; font-size: 0.73rem; color: var(--c-text-muted); padding: 4px; flex-shrink: 0; }
+/* Preview & Processing: Content First */
+.preview-stage { position: relative; flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #000; transition: all var(--dur-normal); }
+.preview-video { flex: 1; width: 100%; min-height: 0; object-fit: contain; }
+.preview-tip { display: flex; align-items: center; gap: 6px; justify-content: center; font-size: 0.73rem; color: var(--c-text-muted); padding: 8px; flex-shrink: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(8px); }
 
-/* Processing Stage */
-.processing-stage { flex: 1; display: flex; align-items: center; justify-content: center; }
-.proc-center { display: flex; flex-direction: column; align-items: center; gap: var(--sp-xl); text-align: center; width: 100%; max-width: 480px; padding: var(--sp-2xl); }
-.proc-ring-outer { width: 100px; height: 100px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1.5px solid rgba(249,115,22,0.4); animation: pulse-ring 2.5s ease-in-out infinite; }
-.proc-ring-inner { width: 68px; height: 68px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: var(--c-accent-subtle); color: var(--c-accent); border: 1px solid var(--c-border-accent); }
-.proc-spin { animation: spin 3s linear infinite; }
-.proc-title { font-family: 'Space Grotesk', sans-serif; font-size: 1.6rem; font-weight: 700; letter-spacing: 0.06em; color: var(--c-text-primary); }
-.proc-file { font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--c-text-muted); max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.proc-queue-hint { font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; color: var(--c-text-muted); padding: 4px 12px; border-radius: var(--r-full); background: var(--c-bg-elevated); border: 1px solid var(--c-border); }
-.prog-wrap { width: 100%; display: flex; flex-direction: column; gap: 8px; }
-.prog-track { width: 100%; height: 5px; background: var(--c-bg-elevated); border-radius: var(--r-full); overflow: hidden; }
-.prog-fill { height: 100%; background: linear-gradient(90deg, var(--c-accent), #fbbf24); border-radius: var(--r-full); transition: width 0.4s var(--ease-out); position: relative; overflow: hidden; }
+/* Minimal Processing Overlay */
+.proc-overlay { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; z-index: 100; }
+.proc-top-bar { height: 4px; background: rgba(255,255,255,0.08); width: 100%; overflow: hidden; }
+.proc-top-fill { height: 100%; background: var(--c-accent); box-shadow: 0 0 15px var(--c-accent); transition: width 0.4s var(--ease-out); position: relative; }
+.proc-top-fill::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.4), transparent); animation: shine 2s ease-in-out infinite; }
+
+.proc-status-badge { position: absolute; bottom: 84px; right: 28px; display: flex; align-items: baseline; gap: 10px; padding: 12px 20px; background: rgba(0,0,0,0.55); backdrop-filter: blur(16px); border: 1px solid rgba(255,255,255,0.12); border-radius: var(--r-md); color: white; box-shadow: 0 12px 40px rgba(0,0,0,0.4); animation: slide-up 0.4s var(--ease-spring); }
+.psb-pct { font-family: 'Space Grotesk', sans-serif; font-size: 1.4rem; font-weight: 800; color: var(--c-accent); line-height: 1; }
+.psb-info { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; opacity: 0.9; font-weight: 600; letter-spacing: 0.04em; white-space: nowrap; }
+
+@keyframes slide-up { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
 .prog-shine { position: absolute; inset: 0; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.35), transparent); animation: shine 2s ease-in-out infinite; }
 .prog-labels { display: flex; justify-content: space-between; }
 .prog-pct { font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; font-weight: 700; color: var(--c-text-primary); }
@@ -975,6 +949,12 @@ onUnmounted(() => { router.terminate(); });
 .sp-section { padding: 20px; border-bottom: 1px solid var(--c-border); display: flex; flex-direction: column; gap: 12px; }
 .sp-section-label { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.14em; color: var(--c-text-muted); }
 .sp-section-label-row { display: flex; align-items: center; justify-content: space-between; }
+.sp-opt-row { display: flex; align-items: center; justify-content: space-between; }
+.sp-opt-label { font-size: 0.82rem; font-weight: 600; color: var(--c-text-secondary); }
+.sp-toggle { position: relative; width: 34px; height: 18px; border-radius: 9px; background: var(--c-bg-elevated); border: 1px solid var(--c-border); cursor: pointer; transition: all var(--dur-normal) var(--ease-out); }
+.sp-toggle::after { content: ''; position: absolute; left: 2px; top: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--c-text-muted); transition: all var(--dur-normal) var(--ease-spring); }
+.sp-toggle.active { background: var(--c-accent-subtle); border-color: var(--c-border-accent); }
+.sp-toggle.active::after { transform: translateX(16px); background: var(--c-accent); }
 .quality-tag { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; font-weight: 700; }
 
 /* Codec cards */
@@ -1026,11 +1006,7 @@ onUnmounted(() => { router.terminate(); });
 .preset-card.active .preset-name { color: var(--c-text-accent); }
 .preset-desc { font-size: 0.6rem; color: var(--c-text-muted); text-align: center; }
 
-/* Coming soon */
-.sp-coming-soon { padding: 16px 20px 20px; display: flex; flex-direction: column; gap: 10px; }
-.cs-label { font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.14em; color: var(--c-text-muted); }
-.cs-slots { display: flex; gap: 6px; }
-.cs-slot { flex: 1; padding: 10px 8px; border-radius: var(--r-md); border: 1px dashed rgba(255,255,255,0.08); color: var(--c-text-muted); font-size: 0.68rem; text-align: center; opacity: 0.5; font-family: 'JetBrains Mono', monospace; }
+
 
 /* Settings panel animation */
 .settings-enter-active { transition: opacity 0.2s var(--ease-out); }

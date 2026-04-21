@@ -27,7 +27,7 @@ export const zh = {
   queue: {
     title: '文件队列',
     header: '队列',
-    addFiles: '+ 选择视频文件',
+    addFiles: '选择视频文件',
     pending: '待处理',
     processing: '处理中...',
     done: '已完成',
@@ -62,10 +62,8 @@ export const zh = {
     recommended: '均衡推荐',
     moreCompression: '更高压缩',
     bestQuality: '最优质量',
-    comingSoon: '即将推出',
-    resScale: '分辨率缩放',
-    audioTrack: '音频轨道',
-    metaStrip: '元数据擦除',
+
+    showLogger: '显示诊断日志按钮',
   },
   process: {
     start: '开始压缩',
@@ -132,7 +130,7 @@ export const en = {
   queue: {
     title: 'File Queue',
     header: 'QUEUE',
-    addFiles: '+ Select Videos',
+    addFiles: 'Select Videos',
     pending: 'Pending',
     processing: 'Processing...',
     done: 'Done',
@@ -167,10 +165,8 @@ export const en = {
     recommended: 'Recommended',
     moreCompression: 'Smaller File',
     bestQuality: 'Best Quality',
-    comingSoon: 'COMING SOON',
-    resScale: 'Resolution Scale',
-    audioTrack: 'Audio Track',
-    metaStrip: 'Metadata Strip',
+
+    showLogger: 'Show Diagnostics Button',
   },
   process: {
     start: 'Start Compression',
