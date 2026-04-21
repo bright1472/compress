@@ -12,7 +12,13 @@
       "Bash(powershell -Command \"Get-Content 'e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\src\\\\components\\\\Dashboard.vue' | Select-Object -Index \\(148..185\\)\")",
       "Bash(powershell -Command \"Get-Content 'e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\src\\\\components\\\\Dashboard.vue' | Select-Object -Index \\(235..265\\)\")",
       "Bash(powershell -Command \"Get-Content 'e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\src\\\\components\\\\Dashboard.vue' | Select-Object -Index \\(455..510\\)\")",
-      "Bash(powershell -Command \"Get-Content 'e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\src\\\\components\\\\Dashboard.vue' | Select-Object -Index \\(85..115\\)\")"
+      "Bash(powershell -Command \"Get-Content 'e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\src\\\\components\\\\Dashboard.vue' | Select-Object -Index \\(85..115\\)\")",
+      "Bash(powershell -Command \"Get-Content 'e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\src\\\\components\\\\Dashboard.vue' | Select-Object -Index \\(186..200\\)\")",
+      "Bash(powershell -Command \"Get-Content 'e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\src\\\\components\\\\Dashboard.vue' | Select-Object -Index \\(539..560\\)\")",
+      "Bash(powershell -Command \"Get-Content 'e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\src\\\\components\\\\Dashboard.vue' | Select-Object -Index \\(535..565\\)\")",
+      "Bash(powershell -Command \"Get-Content 'e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\src\\\\components\\\\Dashboard.vue' | Select-Object -Index \\(525..548\\)\")",
+      "Bash(powershell -Command *)",
+      "Bash(powershell -File -)"
     ]
   }
 }

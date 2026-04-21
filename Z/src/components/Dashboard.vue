@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 import { ref, computed, onUnmounted, onMounted, watch } from 'vue';
 import { EngineRouter } from '../engine/engine-router';
 import ComparisonSlider from './ComparisonSlider.vue';
@@ -527,7 +527,6 @@ onUnmounted(() => { router.terminate(); });
 
         <!-- Done: comparison slider -->
         <div v-if="activeItem && activeItem.status === 'done'" class="result-stage">
-<<<<<<< HEAD
           <div class="result-header">
             <div class="result-stats">
               <span class="rs-item original">原始 {{ fileSizeMB(activeItem.file.size) }} MB</span>
@@ -541,8 +540,7 @@ onUnmounted(() => { router.terminate(); });
               下载此文件
             </button>
           </div>
-=======
->>>>>>> 857c33a4a94ad43fa06d2aea368ad09766333f6d
+
           <div class="slider-wrap">
             <ComparisonSlider :original-url="activeItem.originalUrl" :compressed-url="activeItem.compressedUrl" />
           </div>
