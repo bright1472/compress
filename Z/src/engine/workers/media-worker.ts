@@ -95,7 +95,7 @@ async function runPipeline({ file, config, outputHandle }: any) {
       codec: mapCodec(config.codec),
       bitrate: targetBitrate,
       keyFrameInterval: 2,
-      hardwareAcceleration: 'no-preference',
+      hardwareAcceleration: 'prefer-hardware',
     },
     audio: { discard: true },
   });
