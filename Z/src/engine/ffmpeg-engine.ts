@@ -11,7 +11,7 @@ export interface CompressionOptions {
 
 export type ProgressCallback = (progress: number) => void;
 
-const CORE_PATH = '/ffmpeg';
+const CORE_PATH = '/ffmpeg-mt';
 
 export class FfmpegEngine {
   private ffmpeg: FFmpeg;
@@ -33,6 +33,7 @@ export class FfmpegEngine {
       await this.ffmpeg.load({
         coreURL: await toBlobURL(`${CORE_PATH}/ffmpeg-core.js`, 'text/javascript'),
         wasmURL: await toBlobURL(`${CORE_PATH}/ffmpeg-core.wasm`, 'application/wasm'),
+        workerURL: await toBlobURL(`${CORE_PATH}/ffmpeg-core.worker.js`, 'text/javascript'),
       });
       this.loaded = true;
     })();
@@ -55,7 +56,11 @@ export class FfmpegEngine {
     const args = this.buildArgs(inputName, outputName, options);
     console.log('[FFmpegEngine] exec:', args.join(' '));
 
+    const execStart = performance.now();
     await this.ffmpeg.exec(args);
+    const execMs = ((performance.now() - execStart) / 1000).toFixed(2);
+    const inputMB = (inputFile.size / 1048576).toFixed(1);
+    console.log(`[FFmpegEngine] ${options.codec} done: ${execMs}s (${inputMB} MB)`);
     const data = await this.ffmpeg.readFile(outputName);
 
     // 清理 FS
@@ -69,10 +74,10 @@ export class FfmpegEngine {
     const base = ['-hide_banner', '-loglevel', 'info'];
 
     if (opt.codec === 'libx264') {
-      return [...base, '-i', input, '-c:v', 'libx264', '-crf', String(opt.crf), '-preset', opt.preset, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-y', output];
+      return [...base, '-i', input, '-c:v', 'libx264', '-crf', String(opt.crf), '-preset', opt.preset, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-threads', '0', '-y', output];
     }
     if (opt.codec === 'libx265') {
-      return [...base, '-i', input, '-c:v', 'libx265', '-crf', String(opt.crf), '-preset', opt.preset, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-tag:v', 'hvc1', '-x265-params', 'frame-threads=1', '-y', output];
+      return [...base, '-i', input, '-c:v', 'libx265', '-crf', String(opt.crf), '-preset', opt.preset, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-tag:v', 'hvc1', '-y', output];
     }
     // AV1
     return [...base, '-i', input, '-c:v', 'libaom-av1', '-cpu-used', '8', '-crf', String(opt.crf), '-b:v', '0', '-pix_fmt', 'yuv420p', '-c:a', 'libopus', '-y', output];

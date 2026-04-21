@@ -37,8 +37,8 @@ export const zh = {
     dropToAdd: '松开以添加到队列',
     empty: '拖入文件开始',
     clearQueue: '清空队列',
-    download: '下载',
     remove: '移除',
+    removeConfirm: '确定要停止并移除当前正在处理的任务吗？',
   },
   config: {
     title: '压缩参数设置',
@@ -141,8 +141,8 @@ export const en = {
     dropToAdd: 'Release to add to queue',
     empty: 'Drop files to start',
     clearQueue: 'Clear Queue',
-    download: 'Download',
     remove: 'Remove',
+    removeConfirm: 'Stop and remove the current active task?',
   },
   config: {
     title: 'COMPRESSION SETTINGS',

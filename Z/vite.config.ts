@@ -16,7 +16,7 @@ export default defineConfig({
   },
   optimizeDeps: {
     // 排除 FFmpeg.wasm，让 Vite 不对其做打包优化（它需要加载外部资源）
-    exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util'],
+    exclude: ['@ffmpeg/ffmpeg', '@ffmpeg/util', '@ffmpeg/core-mt'],
   },
   worker: {
     format: 'es',

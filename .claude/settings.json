@@ -20,7 +20,8 @@
       "Bash(powershell -Command *)",
       "Bash(powershell -File -)",
       "mcp__plugin_claude-mem_mcp-search__timeline",
-      "WebSearch"
+      "WebSearch",
+      "Bash(npm install *)"
     ]
   }
 }

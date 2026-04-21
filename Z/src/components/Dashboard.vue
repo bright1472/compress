@@ -180,7 +180,14 @@ const onDragLeave = () => { isDragging.value = false; };
 
 const removeItem = (id: string) => {
   const item = queue.value.find(i => i.id === id);
-  if (!item || item.status === 'processing') return;
+  if (!item) return;
+
+  if (item.status === 'processing') {
+    if (!window.confirm(t.value('queue.removeConfirm'))) return;
+    router.stop();
+    isRunning.value = false;
+  }
+
   if (item.originalUrl) URL.revokeObjectURL(item.originalUrl);
   if (item.compressedUrl) URL.revokeObjectURL(item.compressedUrl);
   queue.value = queue.value.filter(i => i.id !== id);
