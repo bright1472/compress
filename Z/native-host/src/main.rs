@@ -197,6 +197,20 @@ fn pick_directory() -> Option<String> {
     }
 }
 
+fn find_executable(name: &str) -> String {
+    let homebrew_paths = [
+        format!("/opt/homebrew/bin/{}", name),
+        format!("/usr/local/bin/{}", name),
+        format!("/usr/bin/{}", name),
+    ];
+    for path in &homebrew_paths {
+        if std::path::Path::new(path).exists() {
+            return path.clone();
+        }
+    }
+    name.to_string()
+}
+
 fn scan_video_files(dir: &str) -> Vec<String> {
     WalkDir::new(dir)
         .into_iter()
@@ -212,7 +226,8 @@ fn scan_video_files(dir: &str) -> Vec<String> {
 }
 
 fn detect_gpu_encoders() -> Vec<String> {
-    let output = Command::new("ffmpeg")
+    let ffmpeg = find_executable("ffmpeg");
+    let output = Command::new(&ffmpeg)
         .args(["-hide_banner", "-encoders"])
         .output()
         .ok()
@@ -221,7 +236,7 @@ fn detect_gpu_encoders() -> Vec<String> {
 
     let mut available = Vec::new();
     for encoder in &["h264_nvenc", "h264_qsv", "h264_amf", "h264_videotoolbox"] {
-        if output.contains(encoder) && test_encoder_works(encoder) {
+        if output.contains(encoder) && test_encoder_works(encoder, &ffmpeg) {
             available.push(encoder.to_string());
         }
     }
@@ -231,8 +246,8 @@ fn detect_gpu_encoders() -> Vec<String> {
     available
 }
 
-fn test_encoder_works(encoder: &str) -> bool {
-    Command::new("ffmpeg")
+fn test_encoder_works(encoder: &str, ffmpeg: &str) -> bool {
+    Command::new(ffmpeg)
         .args([
             "-hide_banner", "-f", "lavfi", "-i", "color=c=black:s=320x240:r=1",
             "-t", "1", "-c:v", encoder, "-f", "null",
@@ -273,7 +288,7 @@ fn map_video_codec(user_codec: &str, available_encoders: &[String]) -> String {
 }
 
 fn get_duration_seconds(path: &str) -> f64 {
-    Command::new("ffprobe")
+    Command::new(find_executable("ffprobe"))
         .args(["-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", path])
         .output()
         .ok()
@@ -390,7 +405,7 @@ async fn run_ffmpeg(
         output_path,
     ]);
 
-    let mut child = TokioCommand::new("ffmpeg")
+    let mut child = TokioCommand::new(find_executable("ffmpeg"))
         .args(&args)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
