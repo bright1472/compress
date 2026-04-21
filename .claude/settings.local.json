@@ -40,7 +40,8 @@
       "Bash(mv /d/qmd-data/models/*.gguf \"/d/qmd-data/qmd/models/\")",
       "Bash(XDG_CACHE_HOME=/d/qmd-data INDEX_PATH=/d/qmd-data/index.sqlite qmd status)",
       "Bash(taskkill /PID 8328 /F)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(chmod +x /Users/jieone/hello/compress/Z/native-host/install-titan-host-mac.sh)"
     ]
   }
 }

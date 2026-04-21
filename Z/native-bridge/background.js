@@ -1,7 +1,7 @@
 // native-bridge/background.js
 // Service Worker: 管理 Native Messaging 连接，透传消息给扩展页
 
-const HOST_NAME = 'com.yunjing.titan';
+const HOST_NAME = 'com.titan.video.host';
 
 let nativePort = null;
 let messageHandlers = new Map(); // requestId -> callback
@@ -11,6 +11,10 @@ let nextRequestId = 1;
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'DETECT_NATIVE') {
     detectNative(sendResponse);
+    return true;
+  }
+  if (msg.type === 'PICK_DIR') {
+    handlePickDir(sendResponse);
     return true;
   }
   if (msg.type === 'COMPRESS_REQUEST') {
@@ -108,6 +112,21 @@ function handleCompress(payload, callback) {
   });
 }
 
+function handlePickDir(callback) {
+  if (!nativePort) {
+    callback({ path: null });
+    return;
+  }
+  nativePort.postMessage({ type: 'pick_dir' });
+  const onMsg = (response) => {
+    if (response.type === 'picked_dir') {
+      nativePort.onMessage.removeListener(onMsg);
+      callback({ path: response.path });
+    }
+  };
+  nativePort.onMessage.addListener(onMsg);
+}
+
 function handleListFiles(payload, callback) {
   if (!nativePort) {
     callback({ type: 'error', message: 'Native host not connected' });
@@ -127,7 +146,6 @@ function handleListFiles(payload, callback) {
 }
 
 function openOutputDir(payload) {
-  // 打开系统文件管理器
-  const url = payload.path.startsWith('file://') ? payload.path : `file:///${payload.path}`;
-  chrome.tabs.create({ url });
+  if (!nativePort) return;
+  nativePort.postMessage({ type: 'open_dir', path: payload.path });
 }

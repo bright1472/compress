@@ -10,18 +10,30 @@ use walkdir::WalkDir;
 const VIDEO_EXTS: &[&str] = &["mp4", "mov", "mkv", "avi", "webm", "flv", "wmv", "3gp", "ogv", "m4v", "ts", "mts"];
 
 #[derive(Deserialize)]
-#[serde(tag = "type")]
+#[serde(tag = "type", rename_all = "snake_case")]
 enum Request {
     Ping,
+    PickDir,
     ListFiles { dir: String },
     Compress {
-        _requestId: u64,
+        #[serde(rename = "_requestId")]
+        request_id: u64,
+        #[serde(rename = "inputDir")]
         input_dir: String,
+        #[serde(rename = "outputDir")]
         output_dir: String,
         codec: String,
         crf: u32,
         preset: String,
     },
+    OpenDir { path: String },
+}
+
+#[derive(Serialize)]
+struct PickedDirMsg {
+    #[serde(rename = "type")]
+    kind: String,
+    path: String,
 }
 
 #[derive(Serialize)]
@@ -125,13 +137,26 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
                 let msg = serde_json::to_string(&PongMsg { kind: "pong".into(), encoders }).unwrap();
                 send_message(&mut *stdout_clone.lock().await, &msg).await?;
             }
+            Request::PickDir => {
+                let path = pick_directory().unwrap_or_default();
+                let msg = serde_json::to_string(&PickedDirMsg { kind: "picked_dir".into(), path }).unwrap();
+                send_message(&mut *stdout_clone.lock().await, &msg).await?;
+            }
             Request::ListFiles { dir } => {
                 let files = scan_video_files(&dir);
                 let msg = serde_json::to_string(&FileListMsg { kind: "files".into(), files }).unwrap();
                 send_message(&mut *stdout_clone.lock().await, &msg).await?;
             }
+            Request::OpenDir { path } => {
+                #[cfg(target_os = "macos")]
+                let _ = Command::new("open").arg(&path).spawn();
+                #[cfg(target_os = "windows")]
+                let _ = Command::new("explorer").arg(&path).spawn();
+                #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+                let _ = Command::new("xdg-open").arg(&path).spawn();
+            }
             Request::Compress {
-                _requestId: request_id,
+                request_id,
                 input_dir,
                 output_dir,
                 codec,
@@ -154,6 +179,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
+}
+
+fn pick_directory() -> Option<String> {
+    #[cfg(target_os = "macos")]
+    {
+        let output = Command::new("osascript")
+            .args(["-e", "POSIX path of (choose folder)"])
+            .output()
+            .ok()?;
+        let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+        if path.is_empty() { None } else { Some(path) }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        None
+    }
 }
 
 fn scan_video_files(dir: &str) -> Vec<String> {
@@ -179,7 +220,7 @@ fn detect_gpu_encoders() -> Vec<String> {
         .unwrap_or_default();
 
     let mut available = Vec::new();
-    for encoder in &["h264_nvenc", "h264_qsv", "h264_amf"] {
+    for encoder in &["h264_nvenc", "h264_qsv", "h264_amf", "h264_videotoolbox"] {
         if output.contains(encoder) && test_encoder_works(encoder) {
             available.push(encoder.to_string());
         }
@@ -221,6 +262,9 @@ fn map_video_codec(user_codec: &str, available_encoders: &[String]) -> String {
         "av1" if preferred.contains("qsv") => "av1_qsv".to_string(),
         "h264" if preferred.contains("amf") => "h264_amf".to_string(),
         "h265" if preferred.contains("amf") => "hevc_amf".to_string(),
+        "h264" if preferred.contains("videotoolbox") => "h264_videotoolbox".to_string(),
+        "h265" if preferred.contains("videotoolbox") => "hevc_videotoolbox".to_string(),
+        "av1" if preferred.contains("videotoolbox") => "libaom-av1".to_string(),
         "h264" => "libx264".to_string(),
         "h265" => "libx265".to_string(),
         "av1" => "libaom-av1".to_string(),
@@ -323,14 +367,19 @@ async fn run_ffmpeg(
     let duration = get_duration_seconds(input_path);
 
     let is_software = video_codec.starts_with("lib");
+    let is_videotoolbox = video_codec.contains("videotoolbox");
     let mut args = vec![
         "-y", "-i", input_path,
         "-c:v", video_codec,
     ];
 
     let crf_str = crf.to_string();
+    // VideoToolbox uses q:v (1-100, higher=better); map CRF 18-40 → q:v 90-20
+    let vtb_quality = ((40u32.saturating_sub(crf)) * 70 / 22 + 20).to_string();
     if is_software {
         args.extend_from_slice(&["-preset", preset, "-crf", &crf_str, "-threads", "0"]);
+    } else if is_videotoolbox {
+        args.extend_from_slice(&["-q:v", &vtb_quality]);
     } else {
         args.extend_from_slice(&["-preset", preset, "-cq", &crf_str]);
     }

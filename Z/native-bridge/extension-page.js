@@ -19,6 +19,9 @@ let queue = []; // { path, name, size, status, progress, fps, eta }
 let isRunning = false;
 let outputDirPath = '';
 
+const isMac = navigator.platform.toLowerCase().includes('mac');
+const pathExample = isMac ? '/Users/yourname/Videos' : 'C:\\Videos\\input';
+
 // ── Native Host 检测 ──
 async function init() {
   chrome.runtime.sendMessage({ type: 'DETECT_NATIVE' }, (result) => {
@@ -51,35 +54,30 @@ async function init() {
   });
 }
 
-// ── 目录选择 (使用 showDirectoryPicker) ──
-pickInputBtn.addEventListener('click', async () => {
-  try {
-    const dirHandle = await window.showDirectoryPicker({ mode: 'read' });
-    // showDirectoryPicker 返回 FileSystemDirectoryHandle，但无法直接获取真实路径
-    // 方案：让用户手动粘贴路径，或者我们通过 Native Host 来扫描目录
-    // 这里先存 handle，通过 Native Host 扫描
-    inputDirInput.value = dirHandle.name; // 只能拿到目录名
-    // 实际路径需要通过 Native Host 的文件选择器获取
-    // MVP 阶段：让用户在输入框中直接粘贴完整路径
-    inputDirInput.value = '';
-    inputDirInput.placeholder = '请粘贴完整输入目录路径 (如 C:\\Videos\\input)';
-    inputDirInput.removeAttribute('readonly');
-    inputDirInput.focus();
-  } catch {
-    // 用户取消
-  }
+// ── 目录选择 (通过 Native Host 调用系统原生对话框) ──
+pickInputBtn.addEventListener('click', () => {
+  chrome.runtime.sendMessage({ type: 'PICK_DIR' }, (response) => {
+    if (chrome.runtime.lastError || !response || !response.path) {
+      inputDirInput.focus();
+      return;
+    }
+    const dir = response.path.trim().replace(/\/$/, '');
+    inputDirInput.value = dir;
+    chrome.storage.local.set({ titanInputDir: dir });
+    scanDirectory(dir);
+  });
 });
 
-pickOutputBtn.addEventListener('click', async () => {
-  try {
-    const dirHandle = await window.showDirectoryPicker({ mode: 'readwrite' });
-    outputDirInput.value = '';
-    outputDirInput.placeholder = '请粘贴完整输出目录路径';
-    outputDirInput.removeAttribute('readonly');
-    outputDirInput.focus();
-  } catch {
-    // 用户取消
-  }
+pickOutputBtn.addEventListener('click', () => {
+  chrome.runtime.sendMessage({ type: 'PICK_DIR' }, (response) => {
+    if (chrome.runtime.lastError || !response || !response.path) {
+      outputDirInput.focus();
+      return;
+    }
+    outputDirPath = response.path.trim().replace(/\/$/, '');
+    outputDirInput.value = outputDirPath;
+    chrome.storage.local.set({ titanOutputDir: outputDirPath });
+  });
 });
 
 // ── 扫描目录 (通过 Native Host) ──
@@ -90,10 +88,11 @@ function scanDirectory(dir) {
       queue = response.files.map(f => ({
         path: f,
         name: f.split(/[\\/]/).pop(),
-        size: 0, // 暂不显示大小
+        size: 0,
         status: 'pending',
         progress: 0, fps: 0, eta: '',
       }));
+      startBtn.disabled = queue.length === 0;
       renderQueue();
     } else {
       statusBar.textContent = `扫描失败: ${response.message || '未知错误'}`;
@@ -102,19 +101,27 @@ function scanDirectory(dir) {
   });
 }
 
-// 输入目录手动输入时，回车触发扫描
+// 输入目录：回车或失焦均触发扫描
+function triggerInputDirScan() {
+  const dir = inputDirInput.value.trim();
+  if (!dir) return;
+  chrome.storage.local.set({ titanInputDir: dir });
+  scanDirectory(dir);
+}
 inputDirInput.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && inputDirInput.value.trim()) {
-    const dir = inputDirInput.value.trim();
-    chrome.storage.local.set({ titanInputDir: dir });
-    scanDirectory(dir);
-  }
+  if (e.key === 'Enter') triggerInputDirScan();
 });
+inputDirInput.addEventListener('blur', triggerInputDirScan);
+
 outputDirInput.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') {
     outputDirPath = outputDirInput.value.trim();
     chrome.storage.local.set({ titanOutputDir: outputDirPath });
   }
+});
+outputDirInput.addEventListener('blur', () => {
+  outputDirPath = outputDirInput.value.trim();
+  if (outputDirPath) chrome.storage.local.set({ titanOutputDir: outputDirPath });
 });
 
 // ── 渲染队列 ──
