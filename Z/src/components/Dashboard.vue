@@ -203,7 +203,6 @@ const processItem = async (item: QueueItem) => {
     item.compressedUrl = URL.createObjectURL(resultBlob);
     item.elapsed = (Date.now() - item.startTime) / 1000;
     item.progress = 100;
-    item.elapsedSec = Math.round((Date.now() - startTime) / 1000);
     item.status = 'done';
   } catch (e: any) {
     item.status = 'error';
@@ -469,10 +468,6 @@ onUnmounted(() => { router.terminate(); });
 
         <!-- Pending: preview original -->
         <div v-if="activeItem && activeItem.status === 'pending'" class="preview-stage">
-          <div class="preview-header">
-            <span class="preview-badge">{{ t('slider.original') }}</span>
-            <span class="preview-meta">{{ activeItem.file.name }} · {{ fileSizeMB(activeItem.file.size) }} MB</span>
-          </div>
           <video :src="activeItem.originalUrl" class="preview-video" controls muted loop autoplay></video>
           <div class="preview-tip">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><path d="M12 8v4l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
@@ -527,20 +522,6 @@ onUnmounted(() => { router.terminate(); });
 
         <!-- Done: comparison slider -->
         <div v-if="activeItem && activeItem.status === 'done'" class="result-stage">
-          <div class="result-header">
-            <div class="result-stats">
-              <span class="rs-item original">原始 {{ fileSizeMB(activeItem.file.size) }} MB</span>
-              <span class="rs-arrow">→</span>
-              <span class="rs-item compressed">压缩后 {{ fileSizeMB(activeItem.compressedSize) }} MB</span>
-              <span class="rs-badge">节省 {{ compressionRatio(activeItem) }}%</span>
-              <span class="rs-badge">耗时 {{ fmtTime(activeItem.elapsed) }}</span>
-            </div>
-            <button class="btn-dl-single" @click="downloadItem(activeItem)">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              下载此文件
-            </button>
-          </div>
-
           <div class="slider-wrap">
             <ComparisonSlider :original-url="activeItem.originalUrl" :compressed-url="activeItem.compressedUrl" />
           </div>
@@ -866,9 +847,6 @@ onUnmounted(() => { router.terminate(); });
 
 /* Preview Stage */
 .preview-stage { flex: 1; display: flex; flex-direction: column; gap: 10px; padding: var(--sp-lg); overflow: hidden; }
-.preview-header { display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
-.preview-badge { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em; padding: 4px 9px; border-radius: var(--r-sm); background: var(--c-bg-elevated); border: 1px solid var(--c-border); color: var(--c-text-muted); }
-.preview-meta { font-family: 'JetBrains Mono', monospace; font-size: 0.73rem; color: var(--c-text-muted); }
 .preview-video { flex: 1; width: 100%; min-height: 0; object-fit: contain; background: #000; }
 .preview-tip { display: flex; align-items: center; gap: 6px; justify-content: center; font-size: 0.73rem; color: var(--c-text-muted); padding: 4px; flex-shrink: 0; }
 
