@@ -39,6 +39,13 @@ export const zh = {
     clearQueue: '清空队列',
     remove: '移除',
     removeConfirm: '确定要停止并移除当前正在处理的任务吗？',
+    dragToSort: '拖动排序',
+    download: '下载',
+  },
+  mode: {
+    video: '视频',
+    image: '图片',
+    switchTo: '切换到{mode}模式',
   },
   config: {
     title: '压缩参数设置',
@@ -64,6 +71,18 @@ export const zh = {
     bestQuality: '最优质量',
 
     showLogger: '显示诊断日志按钮',
+  },
+  image: {
+    sectionLabel: '图片压缩设置',
+    outputFormat: '输出格式',
+    original: '保持原格式',
+    quality: '压缩质量',
+    qualityHint: '仅对 JPG / WebP / AVIF 有效，PNG 为无损压缩',
+    avifNotSupported: '当前浏览器不支持 AVIF，将使用 WebP 代替',
+    webpNotSupported: '当前浏览器不支持 WebP 输出',
+    addFiles: '选择图片文件',
+    dragToArea: '点击或拖拽图片到此开始',
+    supportBatch: '支持批量处理 · 浏览器本地处理 · 毫秒级响应',
   },
   process: {
     start: '开始压缩',
@@ -143,6 +162,13 @@ export const en = {
     clearQueue: 'Clear Queue',
     remove: 'Remove',
     removeConfirm: 'Stop and remove the current active task?',
+    dragToSort: 'Drag to sort',
+    download: 'Download',
+  },
+  mode: {
+    video: 'Video',
+    image: 'Image',
+    switchTo: 'Switch to {mode} mode',
   },
   config: {
     title: 'COMPRESSION SETTINGS',
@@ -168,6 +194,18 @@ export const en = {
     bestQuality: 'Best Quality',
 
     showLogger: 'Show Diagnostics Button',
+  },
+  image: {
+    sectionLabel: 'Image Compression',
+    outputFormat: 'Output Format',
+    original: 'Keep Original',
+    quality: 'Quality',
+    qualityHint: 'Applies to JPG / WebP / AVIF only. PNG is lossless.',
+    avifNotSupported: 'AVIF not supported, falling back to WebP',
+    webpNotSupported: 'WebP output not supported in this browser',
+    addFiles: 'Select Images',
+    dragToArea: 'Click or drop images here to start',
+    supportBatch: 'Batch · Local-only · Millisecond response',
   },
   process: {
     start: 'Start Compression',

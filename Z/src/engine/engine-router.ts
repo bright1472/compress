@@ -1,16 +1,19 @@
 /**
  * src/engine/engine-router.ts
- * 双引擎统一调度层 — FFmpeg WASM vs WebCodecs 自动选择
+ * 统一调度层 — Video: FFmpeg WASM / WebCodecs | Image: Canvas API
  *
  * 策略：
- *  - 文件 ≤ 2GB → FFmpeg WASM（稳定、兼容性好）
- *  - 文件 > 2GB → WebCodecs（流式处理、OPFS 磁盘缓冲、无内存上限）
+ *  - 图片文件 → ImageEngine（Canvas API，零依赖，毫秒级）
+ *  - 视频 ≤ 2GB → FFmpeg WASM（稳定、兼容性好）
+ *  - 视频 > 2GB → WebCodecs（流式处理、OPFS 磁盘缓冲、无内存上限）
  *  - 降级：若 WebCodecs 不可用则回退 FFmpeg + 警告用户
  */
 
 import { FfmpegEngine } from './ffmpeg-engine';
 import type { CompressionOptions, ProgressCallback } from './ffmpeg-engine';
 import { MediaEngine } from './processor';
+import { ImageEngine } from './image-engine';
+import type { ImageCompressionOptions } from './image-engine';
 import { logger } from './logger';
 
 // 2GB 阈值（WASM 内存安全上限）
@@ -37,12 +40,14 @@ const detectOPFS = async (): Promise<boolean> => {
 export class EngineRouter {
   private ffmpegEngine: FfmpegEngine;
   private webCodecsEngine: MediaEngine;
+  private imageEngine: ImageEngine;
   private webCodecsAvailable: boolean | null = null;
 
   constructor() {
     this.ffmpegEngine = new FfmpegEngine();
     this.webCodecsEngine = new MediaEngine();
-    // 后台静默预热两个引擎，首次压缩无需等待加载
+    this.imageEngine = new ImageEngine();
+    // 后台静默预热两个视频引擎，首次压缩无需等待加载
     this.ffmpegEngine.preload();
     this.webCodecsEngine.warmup().catch(() => {});
   }
@@ -72,7 +77,18 @@ export class EngineRouter {
     options: { codec: string; crf: number; preset: string },
     onProgress: ProgressCallback,
     onRouteDecision?: (decision: RouteDecision) => void,
+    fileType?: 'video' | 'image',
+    imageOptions?: ImageCompressionOptions,
   ): Promise<Blob> {
+    // ── 图片路径（Canvas API，毫秒级，无需进度回调）────────────────
+    if (fileType === 'image') {
+      onProgress(10);
+      const blob = await this.imageEngine.compress(file, imageOptions ?? { outputFormat: 'original', quality: 85 });
+      onProgress(100);
+      return blob;
+    }
+
+    // ── 视频路径（原有逻辑完全不变）─────────────────────────────────
     const decision = await this.route(file.size);
     onRouteDecision?.(decision);
 
