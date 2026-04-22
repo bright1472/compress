@@ -42,6 +42,9 @@ export class EngineRouter {
   constructor() {
     this.ffmpegEngine = new FfmpegEngine();
     this.webCodecsEngine = new MediaEngine();
+    // 后台静默预热两个引擎，首次压缩无需等待加载
+    this.ffmpegEngine.preload();
+    this.webCodecsEngine.warmup().catch(() => {});
   }
 
   /** 根据浏览器能力自动选择引擎 (优先 WebCodecs 追求极致速度) */

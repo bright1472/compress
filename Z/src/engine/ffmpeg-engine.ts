@@ -23,9 +23,16 @@ export class FfmpegEngine {
     this.ffmpeg = new FFmpeg();
   }
 
+  /**
+   * 预加载 WASM 二进制（后台静默下载并初始化）。
+   * 页面空闲时调用即可，首次压缩无需等待 WASM 加载。
+   */
+  preload(): void {
+    this.load(); // fire-and-forget
+  }
+
   async load(): Promise<void> {
     if (this.loaded) return;
-    // Guard against concurrent load() calls
     if (this.loadPromise) return this.loadPromise;
 
     this.loadPromise = (async () => {

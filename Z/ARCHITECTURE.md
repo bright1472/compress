@@ -83,12 +83,29 @@ ffmpeg-core.worker.js ─┘         (多线程 Web Worker)
 | 多路复用 | mediabunny `Mp4OutputFormat` + `StreamTarget` |
 | 磁盘 | OPFS `FileSystemSyncAccessHandle`（同步写入，零拷贝） |
 
-### 3.2 硬件加速
+### 3.2 硬件加速（分辨率受限）
+
 ```typescript
-hardwareAcceleration: 'prefer-hardware'  // media-worker.ts L98
+hardwareAcceleration: 'no-preference'  // media-worker.ts:116 & :135
 ```
-强制使用 GPU encoder（Intel Quick Sync / NVENC / VideoToolbox）。
-Windows Chrome/Edge 通常选择 Intel Quick Sync 或 NVIDIA NVENC。
+
+`'no-preference'` 让浏览器自动选择最合适的编码器：
+- **≤1080p**：浏览器自动启用 GPU 硬件加速（Intel Quick Sync / NVENC）
+- **2K (2560×1440)**：浏览器 GPU 编码器不支持此分辨率 → 自动降级为 CPU 软件编码
+- **4K**：同上，纯 CPU 软件编码
+
+这是浏览器 VideoEncoder API 的硬性限制，非代码可绕过。
+
+**实测数据**（encoder-diag.html, Intel UHD Graphics 770）：
+
+| 分辨率 | isConfigSupported | 实际编码方式 | 吞吐量 |
+|--------|-------------------|------------|--------|
+| 640×480 | ✅ supported | GPU 硬件加速 | 279% 实时（83.6 fps） |
+| 1080p | ✅ supported（推断） | GPU 硬件加速 | 未实测 |
+| 2K 2560×1440 | ❌ **unsupported** | CPU 软件编码 | ~2.3 MB/s |
+| 4K | ❌ **unsupported** | CPU 软件编码 | ~2.3 MB/s |
+
+如需 2K/4K GPU 硬件加速，需使用 Native Host 极速模式（调用系统 FFmpeg + NVENC/QSV）。
 
 ### 3.3 工作流程
 ```
@@ -101,7 +118,7 @@ mediabunny Input.getPrimaryVideoTrack()  ← 读取宽度/高度/时长
 calculateSmartBitrate()  ← 智能码率计算
   │
   ▼
-Conversion.init(video={codec, bitrate, hardwareAcceleration:'prefer-hardware'})
+Conversion.init(video={codec, bitrate, hardwareAcceleration:'no-preference'})
   │
   ▼
 conversion.execute()

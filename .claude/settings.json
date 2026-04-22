@@ -35,7 +35,10 @@
       "PowerShell($bmp = New-Object System.Drawing.Bitmap\\(128, 128\\); $g = [System.Drawing.Graphics]::FromImage\\($bmp\\); $g.Clear\\([System.Drawing.Color]::FromArgb\\(79, 70, 229\\)\\); $font = New-Object System.Drawing.Font\\('Arial', 48, [System.Drawing.FontStyle]::Bold\\); $brush = [System.Drawing.Brushes]::White; $g.DrawString\\('T', $font, $brush, 30, 32\\); $font.Dispose\\(\\); $g.Dispose\\(\\); $bmp.Save\\('e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\native-bridge\\\\icons\\\\icon-128.png', [System.Drawing.Imaging.ImageFormat]::Png\\); $bmp.Dispose\\(\\); Write-Output 'Icon created')",
       "PowerShell($bin = \"e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\native-host\\\\target\\\\release\\\\titan-host.exe\"; $proc = Start-Process -FilePath $bin -NoNewWindow -RedirectStandardError \"t:\\\\temp\\\\native-test-stderr.txt\" -PassThru; Write-Host \"Process started, PID: $\\($proc.Id\\)\"; Start-Sleep -Seconds 2; Stop-Process -Id $proc.Id -Force; Get-Content \"t:\\\\temp\\\\native-test-stderr.txt\" -ErrorAction SilentlyContinue)",
       "Bash(pwsh -Command '$proc = Start-Process -FilePath \"./target/release/titan-host.exe\" -NoNewWindow -PassThru; Write-Host \"PID: $\\($proc.Id\\)\"; Start-Sleep -Seconds 1; Stop-Process -Id $proc.Id -Force; Write-Host \"Process ended\"')",
-      "Bash(git ls-tree *)"
+      "Bash(git ls-tree *)",
+      "Bash(npx vite *)",
+      "PowerShell($log = Get-Content \"e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\log.md\" 2>$null; if \\($log\\) { $perfLines = $log | Select-String \"Perf|Watchdog\" | ForEach-Object { $_.Line }; Write-Host \"Total Perf lines: $\\($perfLines.Count\\)\"; if \\($perfLines.Count -gt 0\\) { $last = $perfLines[-1]; Write-Host \"Last line: $last\" } })",
+      "Bash(gh pr *)"
     ]
   }
 }

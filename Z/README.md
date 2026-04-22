@@ -26,7 +26,7 @@ EngineRouter（engine-router.ts）
 ```
 
 - **Native Host**（极速模式）：Chrome Extension + Rust 原生进程 + FFmpeg GPU 编码，绕过浏览器沙盒
-- **WebCodecs Worker**（主模式）：基于 [mediabunny v1.40.1](https://github.com/Vanilagy/mediabunny)，强制 GPU 硬件加速
+- **WebCodecs Worker**（主模式）：基于 [mediabunny v1.40.1](https://github.com/Vanilagy/mediabunny)，≤1080p 自动启用 GPU 硬件加速
 - **FFmpeg WASM**（降级模式）：浏览器内运行的 FFmpeg，多线程版本 `@ffmpeg/core-mt`
 
 ---
@@ -95,12 +95,13 @@ powershell -ExecutionPolicy Bypass -File install-titan-host.ps1
 
 ### 关键指标
 
-| 指标 | WebCodecs | Native Host (NVENC) |
-|------|-----------|---------------------|
-| 1080p 压缩速度 | ~1× 实时 | ~10-50× 实时 |
-| 二进制大小 | 浏览器内置 | 1.7MB (Rust) |
-| 依赖 | 无 | FFmpeg + GPU 驱动 |
-| 安装 | 无需安装 | 需安装扩展 + Native Host |
+| 指标 | WebCodecs (≤1080p) | WebCodecs (2K/4K) | Native Host (NVENC) |
+|------|--------------------|--------------------|---------------------|
+| 加速方式 | GPU 硬件加速 | CPU 软件编码 | GPU 硬件加速 |
+| 压缩速度 | ~1× 实时 | ~0.3× 实时 | ~10-50× 实时 |
+| 二进制大小 | 浏览器内置 | 浏览器内置 | 1.7MB (Rust) |
+| 依赖 | 无 | 无 | FFmpeg + GPU 驱动 |
+| 安装 | 无需安装 | 无需安装 | 需安装扩展 + Native Host |
 
 ---
 
@@ -111,7 +112,7 @@ powershell -ExecutionPolicy Bypass -File install-titan-host.ps1
 | UI 框架 | Vue 3 + TypeScript + Vite |
 | 主引擎 | mediabunny v1.40.1（WebCodecs Conversion API） |
 | 极速模式 | Rust + FFmpeg + Chrome Native Messaging |
-| 硬件加速 | `hardwareAcceleration: 'prefer-hardware'`（强制 GPU encoder） |
+| 硬件加速 | `hardwareAcceleration: 'no-preference'`（≤1080p 自动启用 GPU，2K/4K 自动降级 CPU） |
 | 降级引擎 | FFmpeg WASM 多线程（`@ffmpeg/core-mt`，`-threads 0` 自动多核） |
 | 封装格式 | MP4（mediabunny Mp4OutputFormat） |
 | 磁盘写入 | OPFS `FileSystemSyncAccessHandle`（同步写入，零拷贝） |

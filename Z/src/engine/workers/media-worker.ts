@@ -31,12 +31,20 @@ interface FileSystemSyncAccessHandle {
 let accessHandle: FileSystemSyncAccessHandle | null = null;
 let conversion: Conversion | null = null;
 let input: Input | null = null;
+let isRunning = false;
 
 self.onmessage = async (e: MessageEvent) => {
   const { type, data } = e.data;
   if (type === 'PING') { postMessage({ type: 'PONG' }); return; }
-  if (type === 'STOP') { await cleanup(); return; }
+  if (type === 'STOP') {
+    if (!isRunning) { await cleanup(); return; }
+    console.log('🛑 [Worker] Received STOP, canceling active conversion');
+    try { await conversion?.cancel(); } catch {}
+    await cleanup();
+    return;
+  }
   if (type === 'START_PROCESS') {
+    isRunning = true;
     try {
       await runPipeline(data);
     } catch (err: any) {
@@ -44,32 +52,39 @@ self.onmessage = async (e: MessageEvent) => {
         console.log('🛑 [Worker] Conversion canceled');
         return;
       }
+      if (err.message?.includes('Input has been disposed')) {
+        console.log('📝 [Worker] InputDisposedError suppressed (likely internal cleanup)');
+        return;
+      }
       console.error('🔥 [Worker] Pipeline Error:', err);
       postMessage({ type: 'ERROR', data: err?.message || String(err) });
+    } finally {
       await cleanup();
+      isRunning = false;
     }
   }
 };
 
 async function runPipeline({ file, config, outputHandle }: any) {
-  console.log('🚀 [Worker] Pipeline Start (mediabunny)');
+  const totalSize = file.size;
 
+  // ── OPFS 输出句柄 ──
+  const t0 = performance.now();
   try {
     accessHandle = await (outputHandle as any).createSyncAccessHandle();
   } catch (ioErr: any) {
-    throw new Error(`OPFS 写入句柄创建失败: ${ioErr.message}. 请确保浏览器支持 OPFS.`);
+    throw new Error(`OPFS 写入句柄创建失败: ${ioErr.message}`);
   }
+  console.log(`⏱️ [Perf] OPFS handle: ${((performance.now() - t0) / 1000).toFixed(2)}s`);
 
-  const totalSize = file.size;
-
-  // OPFS 适配：WritableStream → syncAccessHandle
   const writable = new WritableStream<{ type: 'write'; data: Uint8Array; position: number }>({
     write(chunk) {
       accessHandle!.write(chunk.data as unknown as BufferSource, { at: chunk.position });
     },
   });
 
-  // 读取输入，提取元数据用于 smart bitrate
+  // ── 输入解析 ──
+  const t1 = performance.now();
   input = new Input({ formats: ALL_FORMATS, source: new BlobSource(file) });
   const videoTrack = await input.getPrimaryVideoTrack();
   if (!videoTrack) {
@@ -78,46 +93,83 @@ async function runPipeline({ file, config, outputHandle }: any) {
   const durationSec = await input.computeDuration();
   const width = videoTrack.displayWidth;
   const height = videoTrack.displayHeight;
-  console.log(`📹 [Worker] ${width}x${height}, duration=${durationSec.toFixed(2)}s`);
+  const codedW = videoTrack.codedWidth;
+  const codedH = videoTrack.codedHeight;
+  console.log(`⏱️ [Perf] Input parse: ${((performance.now() - t1) / 1000).toFixed(2)}s`);
+  console.log(`📹 [Worker] ${codedW}x${codedH} → ${width}x${height}, duration=${durationSec.toFixed(2)}s`);
+  console.log(`📹 [Worker] squarePixel: ${videoTrack.squarePixelWidth}x${videoTrack.squarePixelHeight}`);
 
+  // ── 码率计算 ──
   const targetBitrate = calculateSmartBitrate(width, height, totalSize, durationSec, config.bitrate);
   console.log(`🔧 [Worker] Smart bitrate: ${Math.round(targetBitrate / 1000)}kbps (${(targetBitrate / 1000000).toFixed(2)}Mbps)`);
 
+  // ── 编码器配置验证 ──
+  const codec = mapCodec(config.codec);
+  console.log(`🔍 [Perf] Checking encoder support for codec="${codec}" at ${width}x${height}...`);
+  const t1b = performance.now();
+  const codecStr = codec === 'avc' ? 'avc1.640028' : codec === 'hevc' ? 'hev1.1.6.L93.90' : 'av01.0.01M.08';
+  const encSupport = await VideoEncoder.isConfigSupported({
+    codec: codecStr,
+    width: Math.max(width, 2),
+    height: Math.max(height, 2),
+    bitrate: targetBitrate,
+    hardwareAcceleration: 'no-preference',
+  });
+  console.log(`⏱️ [Perf] Encoder check: ${((performance.now() - t1b) / 1000).toFixed(2)}s`);
+  console.log(`🔍 [Perf] Encoder supported: ${encSupport.supported}, hwAccel: ${encSupport.config?.hardwareAcceleration || 'none'}`);
+
+  // ── 编码执行 ──
   const output = new Output({
-    format: new Mp4OutputFormat({ fastStart: 'in-memory' }),
+    format: new Mp4OutputFormat({ fastStart: false }),
     target: new StreamTarget(writable),
   });
 
+  const t2 = performance.now();
   conversion = await Conversion.init({
     input,
     output,
     video: {
-      codec: mapCodec(config.codec),
+      codec,
       bitrate: targetBitrate,
-      keyFrameInterval: 2,
-      hardwareAcceleration: 'prefer-hardware',
+      keyFrameInterval: 5,
+      hardwareAcceleration: 'no-preference',
     },
     audio: { discard: true },
   });
+  console.log(`⏱️ [Perf] Conversion init: ${((performance.now() - t2) / 1000).toFixed(2)}s`);
 
-  conversion.onProgress = (p) => {
-    postMessage({
-      type: 'PROGRESS',
-      data: { loaded: Math.round(p * totalSize), total: totalSize, progress: p * 100 },
-    });
-  };
+  const watchdog = setInterval(() => {
+    const elapsed = ((performance.now() - t2) / 1000).toFixed(0);
+    console.log(`⏰ [Watchdog] encode() running, elapsed=${elapsed}s`);
+  }, 5000);
 
-  await conversion.execute();
+  try {
+    conversion.onProgress = (p) => {
+      if (p < 0.01) return; // skip 0% noise
+      const pct = p * 100;
+      const elapsed = (performance.now() - t2) / 1000;
+      const throughput = elapsed > 0 ? (p * totalSize / 100 / (1024 * 1024) / elapsed).toFixed(1) : '—';
+      console.log(`📊 [Perf] ${pct.toFixed(1)}% | ${elapsed.toFixed(0)}s elapsed | ${throughput} MB/s (cumulative)`);
+      postMessage({
+        type: 'PROGRESS',
+        data: { loaded: Math.round(p * totalSize), total: totalSize, progress: pct },
+      });
+    };
+
+    await conversion.execute();
+  } finally {
+    clearInterval(watchdog);
+  }
+  const encodeTime = (performance.now() - t2) / 1000;
+  const avgFps = durationSec > 0 ? durationSec / encodeTime : 0;
+  const inputThroughput = totalSize / (encodeTime * 1024 * 1024);
+  console.log(`⏱️ [Perf] Encode execute: ${encodeTime.toFixed(1)}s (${avgFps.toFixed(1)} fps, ${inputThroughput.toFixed(1)} MB/s)`);
 
   const handle = accessHandle;
   if (handle) {
     handle.flush();
     handle.close();
   }
-  accessHandle = null;
-  conversion = null;
-  input.dispose();
-  input = null;
 
   console.log('🎉 [Worker] Pipeline Complete');
   postMessage({ type: 'DONE' });
@@ -131,7 +183,7 @@ function mapCodec(legacy: string | undefined): VideoCodec {
 
 async function cleanup() {
   try { await conversion?.cancel(); } catch {}
-  try { input?.dispose(); } catch {}
+  try { input?.dispose(); } catch { /* ignore: may already be disposed internally */ }
   try { accessHandle?.close(); } catch {}
   conversion = null;
   input = null;

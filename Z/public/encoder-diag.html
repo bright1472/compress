@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+  <meta charset="UTF-8">
+  <title>Encoder Diagnostic</title>
+  <style>
+    body { font-family: system-ui; background: #1a1a2e; color: #eee; padding: 20px; max-width: 800px; margin: 0 auto; }
+    pre { background: #16213e; padding: 16px; border-radius: 8px; overflow-x: auto; line-height: 1.6; }
+    .ok { color: #22c55e; } .fail { color: #ef4444; } .warn { color: #f59e0b; }
+    button { padding: 10px 20px; font-size: 14px; margin: 8px 0; cursor: pointer; background: #4f46e5; color: white; border: none; border-radius: 6px; }
+    button:disabled { opacity: 0.5; }
+  </style>
+</head>
+<body>
+<h2>VideoEncoder Hardware Diagnostic</h2>
+<button id="run" onclick="runDiag()">运行诊断</button>
+<pre id="out">点击上方按钮开始...</pre>
+
+<script>
+function log(msg, cls='') {
+  const span = cls ? `<span class="${cls}">${msg}</span>` : msg;
+  document.getElementById('out').innerHTML += span + '\n';
+}
+
+async function runDiag() {
+  const out = document.getElementById('out');
+  const btn = document.getElementById('run');
+  out.innerHTML = '';
+  btn.disabled = true;
+
+  log('=== 1. 浏览器信息 ===');
+  log(`UA: ${navigator.userAgent}`);
+  log(`硬件并发: ${navigator.hardwareConcurrency} 线程`);
+
+  log('\n=== 2. VideoEncoder 编码器支持 ===');
+
+  const tests = [
+    { codec: 'avc1.42001E', name: 'H.264 Baseline' },
+    { codec: 'avc1.4D0028', name: 'H.264 Main' },
+    { codec: 'avc1.640028', name: 'H.264 High' },
+    { codec: 'hev1.1.6.L93.90', name: 'H.265 Main' },
+    { codec: 'av01.0.01M.08', name: 'AV1 Main' },
+  ];
+
+  for (const t of tests) {
+    const result = await VideoEncoder.isConfigSupported({
+      codec: t.codec, width: 1920, height: 1080, bitrate: 8_000_000
+    });
+    const supported = result.supported;
+    const hwAccel = result.config?.hardwareAcceleration;
+    log(`${t.name} (${t.codec})`);
+    log(`  支持: ${supported ? 'YES' : 'NO'} ${supported ? 'ok' : 'fail'}`);
+    if (supported) {
+      log(`  hardwareAcceleration: ${hwAccel || '"none" (软件编码!)'} ${hwAccel === 'prefer-hardware' ? 'ok' : 'warn'}`);
+    }
+  }
+
+  log('\n=== 3. 多分辨率编码吞吐量对比 ===');
+
+  for (const { w, h, name } of [
+    { w: 640, h: 480, name: '640x480' },
+    { w: 1920, h: 1080, name: '1920x1080' },
+    { w: 2560, h: 1440, name: '2560x1440 (2K)' },
+  ]) {
+    log(`\n--- ${name} ---`);
+
+    // Test codec strings mediabunny might use
+    for (const codecStr of ['avc1.42001E', 'avc1.640028']) {
+      const supported = await VideoEncoder.isConfigSupported({
+        codec: codecStr, width: w, height: h, bitrate: 8_000_000
+      });
+      log(`  ${codecStr}: ${supported.supported ? 'YES' : 'NO'} | hw: ${supported.config?.hardwareAcceleration || 'none'}`);
+    }
+
+    // Throughput test
+    const FPS = 30, FRAMES = 300;
+    const encoder = new VideoEncoder({
+      output: (chunk, meta) => {},
+      error: (e) => log(`  编码错误: ${e.message}`, 'fail')
+    });
+
+    let usedHwAccel = 'unknown';
+    for (const hwMode of ['prefer-hardware', 'no-preference']) {
+      const test = await VideoEncoder.isConfigSupported({
+        codec: 'avc1.4D0028', width: w, height: h, bitrate: 8_000_000, hardwareAcceleration: hwMode
+      });
+      if (test.supported) {
+        encoder.configure({ codec: 'avc1.4D0028', width: w, height: h, bitrate: 8_000_000, framerate: FPS, hardwareAcceleration: hwMode });
+        usedHwAccel = hwMode;
+        break;
+      }
+    }
+    log(`  使用 hwAccel: "${usedHwAccel}"`);
+
+    const canvas = new OffscreenCanvas(w, h);
+    const ctx = canvas.getContext('2d');
+    const start = performance.now();
+    let encoded = 0;
+    let totalBytes = 0;
+
+    const encPromise = new Promise(resolve => {
+      encoder.addEventListener('dequeue', () => {
+        encoded++;
+        if (encoded >= FRAMES) {
+          const elapsed = (performance.now() - start) / 1000;
+          const fps = FRAMES / elapsed;
+          log(`  编码 ${FRAMES} 帧, 耗时 ${elapsed.toFixed(2)}s → ${fps.toFixed(1)} fps (${(fps / FPS * 100).toFixed(0)}% realtime)`, fps >= FPS * 0.8 ? 'ok' : fps >= FPS * 0.3 ? 'warn' : 'fail');
+          resolve();
+        }
+      });
+    });
+
+    for (let i = 0; i < FRAMES; i++) {
+      ctx.fillStyle = `hsl(${i * 3}, 50%, 50%)`;
+      ctx.fillRect(0, 0, w, h);
+      const frame = new VideoFrame(canvas, { timestamp: (i / FPS) * 1e6 });
+      encoder.encode(frame, { keyFrame: i % 30 === 0 });
+      frame.close();
+      totalBytes += w * h * 3 / 2;
+    }
+
+    await encoder.flush();
+    await encPromise;
+    encoder.close();
+  }
+
+  log('\n=== 诊断完成 ===');
+  btn.disabled = false;
+}
+</script>
+</body>
+</html>
