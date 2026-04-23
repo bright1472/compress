@@ -91,7 +91,12 @@ export class ImageEngine {
     // PNG 为无损格式，quality 参数对其无效
     const quality = targetMime === 'image/png' ? undefined : options.quality / 100;
 
-    return await this._canvasToBlob(canvas, targetMime, quality);
+    const compressed = await this._canvasToBlob(canvas, targetMime, quality);
+    // If re-encoding made it larger, return the original (common with PNG)
+    if (compressed.size >= file.size && options.outputFormat === 'original') {
+      return file;
+    }
+    return compressed;
   }
 
   /** 获取输出文件的扩展名 */

@@ -37,7 +37,7 @@ watch([imageOutputFormat, imageQuality], () => {
 });
 
 const imageFormatOptions: { value: ImageFmt; label: string }[] = [
-  { value: 'original', label: 'AUTO' },
+  { value: 'original', label: t.value('image.original') },
   { value: 'png', label: 'PNG' },
   { value: 'jpg', label: 'JPG' },
   { value: 'webp', label: 'WebP' },

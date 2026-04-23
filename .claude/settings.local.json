@@ -41,7 +41,10 @@
       "Bash(XDG_CACHE_HOME=/d/qmd-data INDEX_PATH=/d/qmd-data/index.sqlite qmd status)",
       "Bash(taskkill /PID 8328 /F)",
       "Bash(npx tsc *)",
-      "Bash(chmod +x /Users/jieone/hello/compress/Z/native-host/install-titan-host-mac.sh)"
+      "Bash(chmod +x /Users/jieone/hello/compress/Z/native-host/install-titan-host-mac.sh)",
+      "WebFetch(domain:www.npmjs.com)",
+      "Bash(pnpm add *)",
+      "Bash(echo \"EXIT: $?\")"
     ]
   }
 }
