@@ -1,22 +1,21 @@
 /**
  * src/engine/image-engine.ts
- * 图片压缩引擎 — 基于 Canvas API，零外部依赖
+ * 图片压缩引擎 — Canvas API + UPNG.js
  *
- * 支持：
- *  - 原格式保留（智能透明度感知）
- *  - 转换输出：PNG / JPG / WebP / AVIF
- *  - 质量控制（0–100），PNG 使用无损压缩
- *  - AVIF 运行时能力探测（不支持时返回 null 供调用方处理）
+ * PNG  → UPNG.js 调色板量化（quality=100 时 numColors=0 跳过量化，真正无损）
+ * 其他格式 → canvas.toBlob 有损压缩（quality slider 生效）
+ * 压缩后若体积更小则返回压缩版，否则保留原文件
  */
+
+import UPNG from 'upng-js';
 
 export type ImageOutputFormat = 'original' | 'png' | 'jpg' | 'webp' | 'avif';
 
 export interface ImageCompressionOptions {
   outputFormat: ImageOutputFormat;
-  quality: number; // 0–100，PNG 忽略此值
+  quality: number; // 0–100
 }
 
-/** MIME type 映射 */
 const MIME_MAP: Record<Exclude<ImageOutputFormat, 'original'>, string> = {
   png:  'image/png',
   jpg:  'image/jpeg',
@@ -24,7 +23,6 @@ const MIME_MAP: Record<Exclude<ImageOutputFormat, 'original'>, string> = {
   avif: 'image/avif',
 };
 
-/** 获取文件的真实 MIME（用于 original 模式） */
 const resolveOriginalMime = (file: File): string => {
   if (file.type) return file.type;
   const ext = file.name.split('.').pop()?.toLowerCase();
@@ -36,7 +34,6 @@ const resolveOriginalMime = (file: File): string => {
   return extMap[ext ?? ''] ?? 'image/png';
 };
 
-/** 检测浏览器是否支持指定输出格式 */
 const _formatSupport: Partial<Record<string, boolean>> = {};
 export const detectFormatSupport = (format: Exclude<ImageOutputFormat, 'original'>): boolean => {
   if (_formatSupport[format] !== undefined) return _formatSupport[format]!;
@@ -44,7 +41,6 @@ export const detectFormatSupport = (format: Exclude<ImageOutputFormat, 'original
     const canvas = document.createElement('canvas');
     canvas.width = 1; canvas.height = 1;
     const dataUrl = canvas.toDataURL(MIME_MAP[format]);
-    // 合法输出应以 data:<mime> 开头，否则说明不支持
     _formatSupport[format] = dataUrl.startsWith(`data:${MIME_MAP[format]}`);
   } catch {
     _formatSupport[format] = false;
@@ -52,24 +48,12 @@ export const detectFormatSupport = (format: Exclude<ImageOutputFormat, 'original
   return _formatSupport[format]!;
 };
 
-/** 判断格式是否需要保留透明通道（PNG/AVIF/WebP 支持，JPG 不支持） */
 const supportsAlpha = (mime: string) => mime !== 'image/jpeg';
 
 export class ImageEngine {
-  /**
-   * 压缩图片文件
-   * @returns Blob — 压缩后的图片
-   * @throws Error — AVIF/WebP 不受浏览器支持时抛出，供调用方决策降级
-   */
   async compress(file: File, options: ImageCompressionOptions): Promise<Blob> {
     const img = await this._loadImage(file);
-    const canvas = document.createElement('canvas');
-    canvas.width  = img.naturalWidth;
-    canvas.height = img.naturalHeight;
 
-    const ctx = canvas.getContext('2d')!;
-
-    // 确定目标 mime
     let targetMime: string;
     if (options.outputFormat === 'original') {
       targetMime = resolveOriginalMime(file);
@@ -81,25 +65,64 @@ export class ImageEngine {
       targetMime = MIME_MAP[fmt];
     }
 
-    // JPG 不支持透明，需要填充白色底色
+    if (targetMime === 'image/png') {
+      return this._compressPng(img, file, options.quality);
+    }
+
+    return this._compressLossy(img, file, targetMime, options.quality);
+  }
+
+  private _compressPng(img: HTMLImageElement, file: File, quality: number): Blob {
+    const canvas = document.createElement('canvas');
+    canvas.width  = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d')!;
+    ctx.drawImage(img, 0, 0);
+
+    const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+    // quality 100 → numColors=0（UPNG 跳过量化，真正无损）
+    // quality 0 → 4 colors，quality 85 → ~192 colors
+    const numColors = quality === 100 ? 0 : Math.max(4, Math.round((quality / 100) * 256));
+
+    const encoded = UPNG.encode(
+      [imageData.data.buffer],
+      canvas.width,
+      canvas.height,
+      numColors,
+    );
+
+    const compressed = new Blob([encoded], { type: 'image/png' });
+
+    // 只有压缩后更小才返回压缩版本
+    if (compressed.size < file.size) return compressed;
+    return file;
+  }
+
+  /** 有损格式压缩：JPG / WebP / AVIF */
+  private async _compressLossy(
+    img: HTMLImageElement,
+    file: File,
+    targetMime: string,
+    quality: number,
+  ): Promise<Blob> {
+    const canvas = document.createElement('canvas');
+    canvas.width  = img.naturalWidth;
+    canvas.height = img.naturalHeight;
+    const ctx = canvas.getContext('2d')!;
+
     if (!supportsAlpha(targetMime)) {
       ctx.fillStyle = '#ffffff';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     }
     ctx.drawImage(img, 0, 0);
 
-    // PNG 为无损格式，quality 参数对其无效
-    const quality = targetMime === 'image/png' ? undefined : options.quality / 100;
+    const compressed = await this._canvasToBlob(canvas, targetMime, quality / 100);
 
-    const compressed = await this._canvasToBlob(canvas, targetMime, quality);
-    // If re-encoding made it larger, return the original (common with PNG)
-    if (compressed.size >= file.size && options.outputFormat === 'original') {
-      return file;
-    }
-    return compressed;
+    if (compressed.size < file.size) return compressed;
+    return file;
   }
 
-  /** 获取输出文件的扩展名 */
   static getOutputExtension(file: File, format: ImageOutputFormat): string {
     if (format === 'original') {
       return file.name.split('.').pop()?.toLowerCase() ?? 'png';
@@ -107,7 +130,6 @@ export class ImageEngine {
     return format === 'jpg' ? 'jpg' : format;
   }
 
-  /** 获取输出 MIME */
   static getOutputMime(file: File, format: ImageOutputFormat): string {
     if (format === 'original') return resolveOriginalMime(file);
     return MIME_MAP[format];

@@ -16,6 +16,7 @@
     "mediabunny": "^1.40.1",
     "mp4-muxer": "^5.2.2",
     "mp4box": "^2.3.0",
+    "upng-js": "^2.1.0",
     "vue": "^3.5.32"
   },
   "devDependencies": {

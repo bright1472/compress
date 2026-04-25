@@ -332,7 +332,7 @@ defineExpose({
                 :disabled="q.isRunning.value"
               >{{ fmt.label }}</button>
             </div>
-            <template v-if="imageOutputFormat !== 'original' && imageOutputFormat !== 'png'">
+            <template v-if="imageOutputFormat !== 'original'">
               <div class="sp-section-label-row" style="margin-top: 16px;">
                 <span class="sp-subsection-label">{{ t('image.quality') }}</span>
                 <span class="quality-tag" style="color: var(--c-accent)">{{ imageQuality }}%</span>
