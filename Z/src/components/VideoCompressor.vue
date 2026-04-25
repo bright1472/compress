@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, watch, watchEffect, inject } from 'vue';
+import { ref, computed, watch, watchEffect, inject, onMounted } from 'vue';
 import type { EngineRouter } from '../engine/engine-router';
 import ComparisonSlider from './ComparisonSlider.vue';
 import { t, currentLocale } from '../locales/i18n';
@@ -11,7 +11,8 @@ import {
 } from '../composables/useCompressionQueue';
 import { isLoggedIn } from '../composables/useAuth';
 import { canCompress, afterCompress } from '../composables/useUsageLimit';
-import { checkAndGate } from '../composables/useCompressGate';
+import { checkAndGate, limitToastVisible, limitToastMsg } from '../composables/useCompressGate';
+import { fetchGlobalStats, reportStats, globalSavedBytes, globalTotalFiles, formatBytes } from '../composables/useGlobalStats';
 
 const props = defineProps<{ showSettings: boolean }>();
 const emit = defineEmits<{ (e: 'update:showSettings', v: boolean): void }>();
@@ -119,6 +120,7 @@ const processItem = async (item: QueueItem) => {
     item.progress = 100;
     item.status = 'done';
     afterCompress();
+    reportStats(Math.max(0, item.file.size - item.compressedSize), 'video');
 
     const originalMB = (item.file.size / 1048576).toFixed(2);
     const compressedMB = (item.compressedSize / 1048576).toFixed(2);
@@ -162,6 +164,8 @@ const mobileTab = ref<'queue' | 'stage'>('queue');
 watchEffect(() => {
   if (q.activeItem.value?.status === 'done') mobileTab.value = 'stage';
 });
+
+onMounted(fetchGlobalStats);
 
 defineExpose({
   isRunning: q.isRunning,
@@ -262,6 +266,12 @@ defineExpose({
         </div>
 
         <div class="sb-footer">
+          <Transition name="limit-toast">
+            <div v-if="limitToastVisible" class="limit-toast-tip">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/><line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>
+              {{ limitToastMsg }}
+            </div>
+          </Transition>
           <button class="add-files-btn" @click="fileInputRef?.click()" :disabled="q.isRunning.value">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             {{ t('queue.addFiles') }}
@@ -322,6 +332,14 @@ defineExpose({
                 <div class="feat-icon-sm privacy"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
                 <div class="feat-txt"><div class="feat-title">{{ t('features.privacy.title') }}</div><div class="feat-desc">{{ t('features.privacy.desc') }}</div></div>
               </div>
+            </div>
+            <div v-if="globalTotalFiles > 0" class="global-stats-bar">
+              <span class="gs-item">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/></svg>
+                累计节省 <strong>{{ formatBytes(globalSavedBytes) }}</strong>
+              </span>
+              <span class="gs-sep">·</span>
+              <span class="gs-item">共 <strong>{{ globalTotalFiles.toLocaleString() }}</strong> 个文件</span>
             </div>
           </div>
         </div>

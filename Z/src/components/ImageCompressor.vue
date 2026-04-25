@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, inject, watchEffect } from 'vue';
+import { ref, watch, inject, watchEffect, onMounted } from 'vue';
 import ImageComparison from './ImageComparison.vue';
 import type { EngineRouter } from '../engine/engine-router';
 import { t } from '../locales/i18n';
@@ -11,7 +11,8 @@ import {
 } from '../composables/useCompressionQueue';
 import { isLoggedIn } from '../composables/useAuth';
 import { canCompress, afterCompress } from '../composables/useUsageLimit';
-import { checkAndGate } from '../composables/useCompressGate';
+import { checkAndGate, limitToastVisible, limitToastMsg } from '../composables/useCompressGate';
+import { fetchGlobalStats, reportStats, globalSavedBytes, globalTotalFiles, formatBytes } from '../composables/useGlobalStats';
 
 type ImageFmt = 'original' | 'png' | 'jpg' | 'webp' | 'avif';
 
@@ -88,6 +89,7 @@ const processItem = async (item: QueueItem) => {
     item.progress = 100;
     item.status = 'done';
     afterCompress();
+    reportStats(Math.max(0, item.file.size - item.compressedSize), 'image');
 
     const originalMB = (item.file.size / 1048576).toFixed(2);
     const compressedMB = (item.compressedSize / 1048576).toFixed(2);
@@ -135,6 +137,8 @@ const onDragOver = (e: DragEvent) => { e.preventDefault(); isDragging.value = tr
 const onDragLeave = () => { isDragging.value = false; };
 
 const closeSettings = () => emit('update:showSettings', false);
+
+onMounted(fetchGlobalStats);
 
 // ── Mobile tab ────────────────────────────────────────────────────
 const mobileTab = ref<'queue' | 'stage'>('queue');
@@ -238,6 +242,12 @@ defineExpose({
         </div>
 
         <div class="sb-footer">
+          <Transition name="limit-toast">
+            <div v-if="limitToastVisible" class="limit-toast-tip">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/><line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>
+              {{ limitToastMsg }}
+            </div>
+          </Transition>
           <button class="add-files-btn" @click="fileInputRef?.click()" :disabled="q.isRunning.value">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             {{ t('image.addFiles') }}
@@ -275,6 +285,14 @@ defineExpose({
             <p class="drop-sub">{{ t('image.supportBatch') }}</p>
             <div class="drop-formats">
               <span v-for="f in ['PNG','JPG','WebP','AVIF','GIF','BMP']" :key="f" class="fmt-tag">{{ f }}</span>
+            </div>
+            <div v-if="globalTotalFiles > 0" class="global-stats-bar">
+              <span class="gs-item">
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/></svg>
+                累计节省 <strong>{{ formatBytes(globalSavedBytes) }}</strong>
+              </span>
+              <span class="gs-sep">·</span>
+              <span class="gs-item">共 <strong>{{ globalTotalFiles.toLocaleString() }}</strong> 个文件</span>
             </div>
           </div>
         </div>

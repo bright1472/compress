@@ -173,6 +173,41 @@ input, select { font-family: inherit; outline: none; }
 }
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Global Stats Bar (drop zone bottom) ───────────────────────────── */
+.global-stats-bar {
+  display: flex; align-items: center; gap: 8px;
+  margin-top: 14px;
+  padding: 7px 14px;
+  border-radius: var(--r-full);
+  background: var(--c-bg-overlay);
+  border: 1px solid var(--c-border);
+  font-size: 0.7rem; color: var(--c-text-muted);
+  pointer-events: none;
+}
+.gs-item { display: flex; align-items: center; gap: 5px; }
+.gs-item svg { color: var(--c-accent); opacity: 0.8; }
+.gs-item strong { color: var(--c-text-secondary); font-weight: 700; }
+.gs-sep { color: var(--c-border-strong); }
+
+/* ── Limit Toast Tip (above start button, inside sb-footer) ─────────── */
+.limit-toast-tip {
+  width: 100%;
+  display: flex; align-items: center; gap: 8px;
+  padding: 9px 12px;
+  border-radius: var(--r-sm);
+  background: rgba(245,158,11,0.1);
+  border: 1px solid rgba(245,158,11,0.4);
+  color: #f59e0b;
+  font-size: 0.75rem; font-weight: 600;
+  pointer-events: none;
+}
+.limit-toast-enter-active { animation: limit-tip-in 0.22s cubic-bezier(0.34,1.56,0.64,1); }
+.limit-toast-leave-active { transition: opacity 0.15s ease-in, transform 0.15s ease-in; opacity: 0; transform: translateY(-4px); }
+@keyframes limit-tip-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* ── Activation Modal ───────────────────────────────────────────────── */
 .activation-modal { padding-top: 24px; }
 

@@ -12,7 +12,6 @@ import { mode, setMode } from '../composables/useModeToggle';
 import { fmtTime } from '../composables/useCompressionQueue';
 import { isLoggedIn, authUser, logout } from '../composables/useAuth';
 import { usageCount, isSubscribed, usageLimit, syncUsage } from '../composables/useUsageLimit';
-import { limitToastMsg, limitToastVisible } from '../composables/useCompressGate';
 
 // ── EngineRouter 单例，子组件通过 inject 共享 ────────────────────
 const router = new EngineRouter();
@@ -213,17 +212,6 @@ onUnmounted(() => {
     <AuthModal v-if="showAuthModal" @close="showAuthModal = false" />
     <ActivationModal v-if="showActivationModal" @close="showActivationModal = false" />
 
-    <!-- 次数用完提示 -->
-    <Transition name="limit-toast">
-      <div v-if="limitToastVisible" class="limit-toast-banner">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex-shrink:0">
-          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/>
-          <line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
-          <circle cx="12" cy="16" r="1" fill="currentColor"/>
-        </svg>
-        <span>{{ limitToastMsg }}</span>
-      </div>
-    </Transition>
   </div>
 </template>
 

@@ -51,7 +51,9 @@
       "Read(//Users/jieone/.claude/**)",
       "Bash(./node_modules/.bin/vue-tsc --noEmit)",
       "Bash(grep -E \"^d|\\\\.json$|\\\\.ts$\")",
-      "Bash(xargs cat *)"
+      "Bash(xargs cat *)",
+      "Bash(/Users/jieone/hello/basic-backend/node_modules/.bin/tsc --noEmit --project /Users/jieone/hello/basic-backend/tsconfig.json)",
+      "Bash(node_modules/.bin/vite build *)"
     ]
   }
 }
