@@ -13,6 +13,7 @@ import UPNG from 'upng-js';
 import mozjpegWasmUrl from '@jsquash/jpeg/codec/enc/mozjpeg_enc.wasm?url';
 import webpWasmUrl from '@jsquash/webp/codec/enc/webp_enc.wasm?url';
 import webpSimdWasmUrl from '@jsquash/webp/codec/enc/webp_enc_simd.wasm?url';
+import oxipngWasmUrl from '@jsquash/oxipng/codec/pkg/squoosh_oxipng_bg.wasm?url';
 
 export type ImageOutputFormat = 'original' | 'png' | 'jpg' | 'webp' | 'avif';
 
@@ -62,6 +63,22 @@ type WasmEncode = (data: ImageData, options?: { quality?: number }) => Promise<A
 
 let _jpegEncodePromise: Promise<WasmEncode | null> | null = null;
 let _webpEncodePromise: Promise<WasmEncode | null> | null = null;
+
+type OxipngOptimise = (data: ArrayBuffer) => Promise<ArrayBuffer>;
+let _oxipngPromise: Promise<OxipngOptimise | null> | null = null;
+
+async function _initOxipng(): Promise<OxipngOptimise | null> {
+  try {
+    const { default: optimise, init } = await import('@jsquash/oxipng/optimise');
+    await init(oxipngWasmUrl);
+    return (buf: ArrayBuffer) => optimise(buf, { level: 3, optimiseAlpha: true });
+  } catch {
+    return null;
+  }
+}
+
+const getOxipng = (): Promise<OxipngOptimise | null> =>
+  (_oxipngPromise ??= _initOxipng());
 
 async function _initJpegEncoder(): Promise<WasmEncode | null> {
   try {
@@ -115,7 +132,7 @@ export class ImageEngine {
     return this._compressLossy(img, file, targetMime, options.quality);
   }
 
-  private _compressPng(img: HTMLImageElement, file: File, quality: number): Blob {
+  private async _compressPng(img: HTMLImageElement, file: File, quality: number): Promise<Blob> {
     const canvas = document.createElement('canvas');
     canvas.width  = img.naturalWidth;
     canvas.height = img.naturalHeight;
@@ -135,7 +152,17 @@ export class ImageEngine {
       numColors,
     );
 
-    const compressed = new Blob([encoded], { type: 'image/png' });
+    // oxipng 二次优化：试不同 deflate 策略和滤镜，无损提升压缩率 15-30%
+    const oxipng = await getOxipng();
+    let best: ArrayBuffer = encoded;
+    if (oxipng) {
+      try {
+        const optimized = await oxipng(encoded);
+        if (optimized.byteLength < encoded.byteLength) best = optimized;
+      } catch { /* ignore, fall through to UPNG result */ }
+    }
+
+    const compressed = new Blob([best], { type: 'image/png' });
     if (compressed.size < file.size) return compressed;
     return file;
   }

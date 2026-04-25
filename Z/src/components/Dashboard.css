@@ -264,23 +264,6 @@
 /* Result Stage */
 .result-stage { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
 .slider-wrap { flex: 1; min-height: 0; overflow: hidden; }
-/* Zoom bar */
-.zoom-bar { display: flex; align-items: center; gap: 6px; padding: 6px 12px; flex-shrink: 0; border-bottom: 1px solid var(--c-border); background: var(--c-bg); }
-.zoom-btn { display: flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: 1px solid var(--c-border); border-radius: 4px; background: var(--c-bg-elevated); color: var(--c-text); cursor: pointer; transition: background 0.15s; }
-.zoom-btn:hover:not(:disabled) { background: var(--c-bg-hover); }
-.zoom-btn:disabled { opacity: 0.35; cursor: not-allowed; }
-.zoom-label { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; font-weight: 600; min-width: 36px; text-align: center; color: var(--c-text-muted); }
-.zoom-reset-btn { font-size: 0.65rem; padding: 2px 8px; border: 1px solid var(--c-border); border-radius: 4px; background: transparent; color: var(--c-text-muted); cursor: pointer; transition: color 0.15s; }
-.zoom-reset-btn:hover { color: var(--c-text); }
-/* Image comparison layout */
-.img-compare-scroll { flex: 1; overflow: auto; min-height: 0; }
-.img-compare-wrap { display: flex; align-items: stretch; gap: 1px; background: var(--c-border); min-height: 100%; }
-.img-compare-side { flex: 1; display: flex; flex-direction: column; background: var(--c-bg-elevated); overflow: hidden; min-width: 0; }
-.img-compare-label { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; font-weight: 700; letter-spacing: 0.1em; padding: 8px 14px; flex-shrink: 0; }
-.img-compare-label.original { color: #f59e0b; background: rgba(245,158,11,0.08); border-bottom: 1px solid rgba(245,158,11,0.2); }
-.img-compare-label.compressed { color: #22c55e; background: rgba(34,197,94,0.08); border-bottom: 1px solid rgba(34,197,94,0.2); }
-.img-compare-img { flex: 1; min-height: 200px; width: 100%; object-fit: contain; padding: 16px; }
-.img-compare-divider { width: 1px; background: var(--c-border); flex-shrink: 0; }
 
 /* Error Stage */
 .error-stage { flex: 1; display: flex; align-items: center; justify-content: center; }

@@ -13,6 +13,7 @@
     "@ffmpeg/ffmpeg": "^0.12.15",
     "@ffmpeg/util": "^0.12.2",
     "@jsquash/jpeg": "^1.6.0",
+    "@jsquash/oxipng": "^2.3.0",
     "@jsquash/webp": "^1.5.0",
     "@vitejs/plugin-basic-ssl": "^2.3.0",
     "mediabunny": "^1.40.1",

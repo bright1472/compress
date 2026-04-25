@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, watch, inject } from 'vue';
+import ImageComparison from './ImageComparison.vue';
 import type { EngineRouter } from '../engine/engine-router';
 import { t } from '../locales/i18n';
 import { logger } from '../engine/logger';
@@ -118,12 +119,6 @@ const onDragOver = (e: DragEvent) => { e.preventDefault(); isDragging.value = tr
 const onDragLeave = () => { isDragging.value = false; };
 
 const closeSettings = () => emit('update:showSettings', false);
-
-// ── 对比缩放 ─────────────────────────────────────────────────────
-const compareZoom = ref(1);
-const zoomIn  = () => { compareZoom.value = Math.min(+(compareZoom.value + 0.25).toFixed(2), 4); };
-const zoomOut = () => { compareZoom.value = Math.max(+(compareZoom.value - 0.25).toFixed(2), 0.5); };
-const zoomReset = () => { compareZoom.value = 1; };
 
 defineExpose({
   isRunning: q.isRunning,
@@ -287,29 +282,12 @@ defineExpose({
         </div>
 
         <div v-if="q.activeItem.value && q.activeItem.value.status === 'done'" class="result-stage">
-          <div class="zoom-bar">
-            <button class="zoom-btn" @click="zoomOut" :disabled="compareZoom <= 0.5" title="缩小">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            </button>
-            <span class="zoom-label">{{ Math.round(compareZoom * 100) }}%</span>
-            <button class="zoom-btn" @click="zoomIn" :disabled="compareZoom >= 4" title="放大">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            </button>
-            <button class="zoom-reset-btn" @click="zoomReset" v-if="compareZoom !== 1">重置</button>
-          </div>
-          <div class="img-compare-scroll">
-            <div class="img-compare-wrap" :style="{ transform: `scale(${compareZoom})`, transformOrigin: 'top left', width: `${100 / compareZoom}%`, height: compareZoom > 1 ? `${100 / compareZoom}%` : '100%' }">
-              <div class="img-compare-side">
-                <div class="img-compare-label original">ORIGINAL · {{ fileSizeMB(q.activeItem.value.file.size) }} MB</div>
-                <img :src="q.activeItem.value.originalUrl" class="img-compare-img" draggable="false" />
-              </div>
-              <div class="img-compare-divider"></div>
-              <div class="img-compare-side">
-                <div class="img-compare-label compressed">COMPRESSED · {{ fileSizeMB(q.activeItem.value.compressedSize) }} MB · ↓{{ compressionRatio(q.activeItem.value) }}%</div>
-                <img :src="q.activeItem.value.compressedUrl" class="img-compare-img" draggable="false" />
-              </div>
-            </div>
-          </div>
+          <ImageComparison
+            :original-url="q.activeItem.value.originalUrl"
+            :compressed-url="q.activeItem.value.compressedUrl ?? ''"
+            :original-label="`ORIGINAL · ${fileSizeMB(q.activeItem.value.file.size)} MB`"
+            :compressed-label="`COMPRESSED · ${fileSizeMB(q.activeItem.value.compressedSize)} MB · ↓${compressionRatio(q.activeItem.value)}%`"
+          />
         </div>
 
         <div v-if="q.activeItem.value && q.activeItem.value.status === 'error'" class="error-stage">
