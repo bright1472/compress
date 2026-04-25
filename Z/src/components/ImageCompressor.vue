@@ -119,6 +119,12 @@ const onDragLeave = () => { isDragging.value = false; };
 
 const closeSettings = () => emit('update:showSettings', false);
 
+// ── 对比缩放 ─────────────────────────────────────────────────────
+const compareZoom = ref(1);
+const zoomIn  = () => { compareZoom.value = Math.min(+(compareZoom.value + 0.25).toFixed(2), 4); };
+const zoomOut = () => { compareZoom.value = Math.max(+(compareZoom.value - 0.25).toFixed(2), 0.5); };
+const zoomReset = () => { compareZoom.value = 1; };
+
 defineExpose({
   isRunning: q.isRunning,
   pendingCount: q.pendingCount,
@@ -180,7 +186,7 @@ defineExpose({
                   <span class="qi-prefix" :class="item.status">{{ statusPrefix(item) }}</span>{{ item.file.name }}
                 </p>
                 <div class="qi-meta">
-                  <span class="m-capsule img-type">IMG</span>
+                  <span class="m-capsule img-type">{{ getExt(item.file).toUpperCase() || 'IMG' }}</span>
                   <template v-if="item.status === 'done'">
                     <span class="m-capsule size-group">
                       <span class="src-val">{{ fileSizeMB(item.file.size) }}</span>
@@ -281,15 +287,27 @@ defineExpose({
         </div>
 
         <div v-if="q.activeItem.value && q.activeItem.value.status === 'done'" class="result-stage">
-          <div class="img-compare-wrap">
-            <div class="img-compare-side">
-              <div class="img-compare-label original">ORIGINAL · {{ fileSizeMB(q.activeItem.value.file.size) }} MB</div>
-              <img :src="q.activeItem.value.originalUrl" class="img-compare-img" draggable="false" />
-            </div>
-            <div class="img-compare-divider"></div>
-            <div class="img-compare-side">
-              <div class="img-compare-label compressed">COMPRESSED · {{ fileSizeMB(q.activeItem.value.compressedSize) }} MB · ↓{{ compressionRatio(q.activeItem.value) }}%</div>
-              <img :src="q.activeItem.value.compressedUrl" class="img-compare-img" draggable="false" />
+          <div class="zoom-bar">
+            <button class="zoom-btn" @click="zoomOut" :disabled="compareZoom <= 0.5" title="缩小">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+            <span class="zoom-label">{{ Math.round(compareZoom * 100) }}%</span>
+            <button class="zoom-btn" @click="zoomIn" :disabled="compareZoom >= 4" title="放大">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            </button>
+            <button class="zoom-reset-btn" @click="zoomReset" v-if="compareZoom !== 1">重置</button>
+          </div>
+          <div class="img-compare-scroll">
+            <div class="img-compare-wrap" :style="{ transform: `scale(${compareZoom})`, transformOrigin: 'top left', width: `${100 / compareZoom}%`, height: compareZoom > 1 ? `${100 / compareZoom}%` : '100%' }">
+              <div class="img-compare-side">
+                <div class="img-compare-label original">ORIGINAL · {{ fileSizeMB(q.activeItem.value.file.size) }} MB</div>
+                <img :src="q.activeItem.value.originalUrl" class="img-compare-img" draggable="false" />
+              </div>
+              <div class="img-compare-divider"></div>
+              <div class="img-compare-side">
+                <div class="img-compare-label compressed">COMPRESSED · {{ fileSizeMB(q.activeItem.value.compressedSize) }} MB · ↓{{ compressionRatio(q.activeItem.value) }}%</div>
+                <img :src="q.activeItem.value.compressedUrl" class="img-compare-img" draggable="false" />
+              </div>
             </div>
           </div>
         </div>

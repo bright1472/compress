@@ -124,9 +124,9 @@ export class ImageEngine {
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-    // quality 100 → numColors=0（UPNG 跳过量化，真正无损）
-    // quality 0 → 4 colors，quality 85 → ~192 colors
-    const numColors = quality === 100 ? 0 : Math.max(4, Math.round((quality / 100) * 256));
+    // quality >= 85 → numColors=0（无损，UPNG deflate 比 canvas.toBlob 更优）
+    // quality < 85  → 调色板量化（quality=0 → 4 色，quality=84 → ~215 色）
+    const numColors = quality >= 85 ? 0 : Math.max(4, Math.round((quality / 100) * 256));
 
     const encoded = UPNG.encode(
       [imageData.data.buffer],

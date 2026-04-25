@@ -257,12 +257,8 @@ defineExpose({
             <div class="drop-icon-wrap">
               <div class="drop-ring-outer"></div><div class="drop-ring"></div>
               <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
-                <line x1="17" y1="2" x2="17" y2="9" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                <line x1="17" y1="25" x2="17" y2="32" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                <line x1="2" y1="17" x2="9" y2="17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                <line x1="25" y1="17" x2="32" y2="17" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
-                <circle cx="17" cy="17" r="6" stroke="currentColor" stroke-width="1.5"/>
-                <circle cx="17" cy="17" r="2" fill="currentColor"/>
+                <rect x="2" y="9" width="20" height="16" rx="2" stroke="currentColor" stroke-width="1.5"/>
+                <polygon points="22,13 32,8 32,26 22,21" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none"/>
               </svg>
             </div>
             <h2 class="drop-title">{{ t('process.dragToArea') }}</h2>
