@@ -11,6 +11,7 @@ import {
 } from '../composables/useCompressionQueue';
 import { isLoggedIn } from '../composables/useAuth';
 import { canCompress, afterCompress } from '../composables/useUsageLimit';
+import { checkAndGate } from '../composables/useCompressGate';
 
 const props = defineProps<{ showSettings: boolean }>();
 const emit = defineEmits<{ (e: 'update:showSettings', v: boolean): void }>();
@@ -20,10 +21,7 @@ const openAuthModal = inject<() => void>('openAuthModal', () => {});
 const openActivationModal = inject<() => void>('openActivationModal', () => {});
 
 const handleStart = () => {
-  if (!canCompress.value) {
-    isLoggedIn.value ? openActivationModal() : openAuthModal();
-    return;
-  }
+  if (!checkAndGate(openAuthModal, openActivationModal)) return;
   q.processQueue();
 };
 
@@ -88,8 +86,7 @@ const tierLabel = computed(() => {
 const isCpuMode = computed(() => currentTier.value !== null && currentTier.value >= 3);
 
 const processItem = async (item: QueueItem) => {
-  if (!canCompress.value) {
-    isLoggedIn.value ? openActivationModal() : openAuthModal();
+  if (!checkAndGate(openAuthModal, openActivationModal)) {
     throw new Error('QUOTA_EXCEEDED');
   }
   item.status = 'processing';
