@@ -44,7 +44,10 @@
       "Bash(chmod +x /Users/jieone/hello/compress/Z/native-host/install-titan-host-mac.sh)",
       "WebFetch(domain:www.npmjs.com)",
       "Bash(pnpm add *)",
-      "Bash(echo \"EXIT: $?\")"
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(pnpm search *)",
+      "Bash(pnpm build *)",
+      "Bash(grep -v \"^$\")"
     ]
   }
 }

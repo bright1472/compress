@@ -1,13 +1,18 @@
 /**
  * src/engine/image-engine.ts
- * 图片压缩引擎 — Canvas API + UPNG.js
+ * 图片压缩引擎 — Canvas API + UPNG.js + jsquash WASM
  *
- * PNG  → UPNG.js 调色板量化（quality=100 时 numColors=0 跳过量化，真正无损）
- * 其他格式 → canvas.toBlob 有损压缩（quality slider 生效）
+ * PNG  → UPNG.js 调色板量化（quality=100 时 numColors=0 真正无损）
+ * JPG  → @jsquash/jpeg (mozjpeg WASM)，压缩率比 canvas.toBlob 高 20-30%
+ * WebP → @jsquash/webp (libwebp WASM)，自动检测 SIMD 加速
+ * AVIF → canvas.toBlob（avif WASM 体积过大，浏览器原生即可）
  * 压缩后若体积更小则返回压缩版，否则保留原文件
  */
 
 import UPNG from 'upng-js';
+import mozjpegWasmUrl from '@jsquash/jpeg/codec/enc/mozjpeg_enc.wasm?url';
+import webpWasmUrl from '@jsquash/webp/codec/enc/webp_enc.wasm?url';
+import webpSimdWasmUrl from '@jsquash/webp/codec/enc/webp_enc_simd.wasm?url';
 
 export type ImageOutputFormat = 'original' | 'png' | 'jpg' | 'webp' | 'avif';
 
@@ -49,6 +54,44 @@ export const detectFormatSupport = (format: Exclude<ImageOutputFormat, 'original
 };
 
 const supportsAlpha = (mime: string) => mime !== 'image/jpeg';
+
+// ── WASM 编码器懒初始化 ────────────────────────────────────────────
+
+// options 对齐 @jsquash 实际签名（均为 Partial<EncodeOptions>，quality 可选）
+type WasmEncode = (data: ImageData, options?: { quality?: number }) => Promise<ArrayBuffer>;
+
+let _jpegEncodePromise: Promise<WasmEncode | null> | null = null;
+let _webpEncodePromise: Promise<WasmEncode | null> | null = null;
+
+async function _initJpegEncoder(): Promise<WasmEncode | null> {
+  try {
+    const { default: encode, init } = await import('@jsquash/jpeg/encode');
+    await init({ locateFile: () => mozjpegWasmUrl });
+    return encode as WasmEncode;
+  } catch {
+    return null;
+  }
+}
+
+async function _initWebpEncoder(): Promise<WasmEncode | null> {
+  try {
+    const { default: encode, init } = await import('@jsquash/webp/encode');
+    await init({
+      locateFile: (path: string) => path.includes('simd') ? webpSimdWasmUrl : webpWasmUrl,
+    });
+    return encode as WasmEncode;
+  } catch {
+    return null;
+  }
+}
+
+const getJpegEncoder = (): Promise<WasmEncode | null> =>
+  (_jpegEncodePromise ??= _initJpegEncoder());
+
+const getWebpEncoder = (): Promise<WasmEncode | null> =>
+  (_webpEncodePromise ??= _initWebpEncoder());
+
+// ── 引擎主体 ──────────────────────────────────────────────────────
 
 export class ImageEngine {
   async compress(file: File, options: ImageCompressionOptions): Promise<Blob> {
@@ -93,13 +136,10 @@ export class ImageEngine {
     );
 
     const compressed = new Blob([encoded], { type: 'image/png' });
-
-    // 只有压缩后更小才返回压缩版本
     if (compressed.size < file.size) return compressed;
     return file;
   }
 
-  /** 有损格式压缩：JPG / WebP / AVIF */
   private async _compressLossy(
     img: HTMLImageElement,
     file: File,
@@ -117,8 +157,35 @@ export class ImageEngine {
     }
     ctx.drawImage(img, 0, 0);
 
-    const compressed = await this._canvasToBlob(canvas, targetMime, quality / 100);
+    // JPG → mozjpeg WASM（比 canvas.toBlob 压缩率高 20-30%）
+    if (targetMime === 'image/jpeg') {
+      const encode = await getJpegEncoder();
+      if (encode) {
+        // Emscripten 会将像素数据复制进 WASM 线性内存，buffer 所有权仍在浏览器侧。
+        // 若将来升级多线程 WASM（SharedArrayBuffer），需在此处先 .slice() 再传入。
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const buffer = await encode(imageData, { quality });
+        const compressed = new Blob([buffer], { type: 'image/jpeg' });
+        if (compressed.size < file.size) return compressed;
+        return file;
+      }
+    }
 
+    // WebP → libwebp WASM（SIMD 自动加速）
+    if (targetMime === 'image/webp') {
+      const encode = await getWebpEncoder();
+      if (encode) {
+        // 同上：多线程 WASM 升级时需先 .slice() 再传入
+        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+        const buffer = await encode(imageData, { quality });
+        const compressed = new Blob([buffer], { type: 'image/webp' });
+        if (compressed.size < file.size) return compressed;
+        return file;
+      }
+    }
+
+    // 回退：canvas.toBlob（AVIF 或 WASM 初始化失败时）
+    const compressed = await this._canvasToBlob(canvas, targetMime, quality / 100);
     if (compressed.size < file.size) return compressed;
     return file;
   }
