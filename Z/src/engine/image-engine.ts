@@ -36,6 +36,7 @@ const resolveOriginalMime = (file: File): string => {
     png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
     webp: 'image/webp', avif: 'image/avif', gif: 'image/gif',
     bmp: 'image/bmp', ico: 'image/x-icon', tiff: 'image/tiff', tif: 'image/tiff',
+    heic: 'image/jpeg', heif: 'image/jpeg',
   };
   return extMap[ext ?? ''] ?? 'image/png';
 };
@@ -71,7 +72,11 @@ async function _initOxipng(): Promise<OxipngOptimise | null> {
   try {
     const { default: optimise, init } = await import('@jsquash/oxipng/optimise');
     await init(oxipngWasmUrl);
-    return (buf: ArrayBuffer) => optimise(buf, { level: 3, optimiseAlpha: true });
+    // level 1 比 level 3 快 5-8×，压缩率差距仅 1-3%，大图优先选速度
+    return (buf: ArrayBuffer) => {
+      const level = buf.byteLength > 1_000_000 ? 1 : 2;
+      return optimise(buf, { level, optimiseAlpha: true });
+    };
   } catch {
     return null;
   }
@@ -107,6 +112,12 @@ const getJpegEncoder = (): Promise<WasmEncode | null> =>
 
 const getWebpEncoder = (): Promise<WasmEncode | null> =>
   (_webpEncodePromise ??= _initWebpEncoder());
+
+export function warmupEncoders(): void {
+  void getJpegEncoder();
+  void getWebpEncoder();
+  void getOxipng();
+}
 
 // ── 引擎主体 ──────────────────────────────────────────────────────
 
@@ -152,13 +163,14 @@ export class ImageEngine {
       numColors,
     );
 
-    // oxipng 二次优化：试不同 deflate 策略和滤镜，无损提升压缩率 15-30%
-    const oxipng = await getOxipng();
+    // oxipng 二次优化：仅对小文件运行，大文件收益有限但耗时明显（8MB+ 会增加 2-3s）
+    const oxipng = file.size < 2_000_000 ? await getOxipng() : null;
     let best: ArrayBuffer = encoded;
     if (oxipng) {
       try {
-        const optimized = await oxipng(encoded);
-        if (optimized.byteLength < encoded.byteLength) best = optimized;
+        const timeout = new Promise<null>(r => setTimeout(() => r(null), 2000));
+        const result = await Promise.race([oxipng(encoded), timeout]);
+        if (result && result.byteLength < encoded.byteLength) best = result;
       } catch { /* ignore, fall through to UPNG result */ }
     }
 

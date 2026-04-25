@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, watch, inject } from 'vue';
+import { ref, computed, watch, watchEffect, inject } from 'vue';
 import type { EngineRouter } from '../engine/engine-router';
 import ComparisonSlider from './ComparisonSlider.vue';
-import { t } from '../locales/i18n';
+import { t, currentLocale } from '../locales/i18n';
 import { logger } from '../engine/logger';
 import {
   useCompressionQueue,
-  fileSizeMB, statusPrefix, compressionRatio, fmtTime,
+  fileSizeStr, statusPrefix, compressionRatio, fmtTime,
   type QueueItem,
 } from '../composables/useCompressionQueue';
 
@@ -130,6 +130,15 @@ const onDragLeave = () => { isDragging.value = false; };
 
 const closeSettings = () => emit('update:showSettings', false);
 
+// ── 浏览器兼容检测 ────────────────────────────────────────────────
+const webCodecsSupported = typeof window !== 'undefined' && 'VideoEncoder' in window;
+
+// ── Mobile tab ────────────────────────────────────────────────────
+const mobileTab = ref<'queue' | 'stage'>('queue');
+watchEffect(() => {
+  if (q.activeItem.value?.status === 'done') mobileTab.value = 'stage';
+});
+
 defineExpose({
   isRunning: q.isRunning,
   pendingCount: q.pendingCount,
@@ -151,7 +160,7 @@ defineExpose({
 
     <input type="file" accept="video/*" multiple hidden ref="fileInputRef" @change="onFileInput" />
 
-    <div class="app-body">
+    <div class="app-body" :class="q.totalCount.value > 0 ? `mob-${mobileTab}` : ''">
       <!-- Sidebar -->
       <aside v-if="q.totalCount.value > 0" class="sidebar">
         <div class="queue-wrap">
@@ -195,19 +204,19 @@ defineExpose({
                 <div class="qi-meta">
                   <template v-if="item.status === 'done'">
                     <span class="m-capsule size-group">
-                      <span class="src-val">{{ fileSizeMB(item.file.size) }}</span>
+                      <span class="src-val">{{ fileSizeStr(item.file.size) }}</span>
                       <span class="size-arrow">→</span>
-                      <span class="res-val">{{ fileSizeMB(item.compressedSize) }} MB</span>
+                      <span class="res-val">{{ fileSizeStr(item.compressedSize) }}</span>
                     </span>
                     <span class="m-capsule ratio">↓{{ compressionRatio(item) }}%</span>
                     <span class="m-capsule time">{{ fmtTime(item.elapsed) }}</span>
                   </template>
                   <template v-else-if="item.status === 'processing'">
-                    <span class="m-capsule src">{{ fileSizeMB(item.file.size) }} MB</span>
+                    <span class="m-capsule src">{{ fileSizeStr(item.file.size) }}</span>
                     <span class="m-capsule time">{{ fmtTime(item.elapsed) }}</span>
                   </template>
                   <template v-else>
-                    <span class="m-capsule src">{{ fileSizeMB(item.file.size) }} MB</span>
+                    <span class="m-capsule src">{{ fileSizeStr(item.file.size) }}</span>
                     <span v-if="item.status === 'error'" class="m-capsule err">ERR</span>
                   </template>
                 </div>
@@ -252,6 +261,17 @@ defineExpose({
 
       <!-- Main stage -->
       <main class="stage" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
+        <!-- 浏览器不支持 WebCodecs 时的前置提示 -->
+        <div v-if="!webCodecsSupported" class="browser-compat-banner">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="currentColor" stroke-width="1.8"/><line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
+          <div class="bcb-text">
+            <strong>{{ t('process.browserUnsupported') }}</strong>
+            <span>{{ t('process.browserUnsupportedHint') }}</span>
+          </div>
+          <a href="https://www.google.com/chrome/" target="_blank" rel="noopener" class="bcb-cta">
+            {{ currentLocale === 'zh' ? '下载 Chrome' : 'Get Chrome' }}
+          </a>
+        </div>
         <div v-if="q.totalCount.value === 0" class="drop-zone" :class="{ dragging: isDragging }" @click="fileInputRef?.click()">
           <div class="drop-content">
             <div class="drop-icon-wrap">
@@ -325,6 +345,19 @@ defineExpose({
         </div>
       </main>
     </div>
+
+    <!-- Mobile tab bar -->
+    <nav v-if="q.totalCount.value > 0" class="mob-tabbar">
+      <button class="mob-tab" :class="{ active: mobileTab === 'queue' }" @click="mobileTab = 'queue'">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><line x1="8" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="8" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="8" y1="18" x2="21" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="6" x2="3.01" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="12" x2="3.01" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="18" x2="3.01" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span>{{ t('queue.header') }} · {{ q.doneCount.value }}/{{ q.totalCount.value }}</span>
+      </button>
+      <button class="mob-tab" :class="{ active: mobileTab === 'stage' }" @click="mobileTab = 'stage'">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><polygon points="23 7 16 12 23 17 23 7" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><rect x="1" y="5" width="15" height="14" rx="2" stroke="currentColor" stroke-width="2"/></svg>
+        <span>{{ t('mode.video') }}</span>
+        <span v-if="q.activeItem.value?.status === 'done'" class="mob-tab-dot"></span>
+      </button>
+    </nav>
 
     <!-- ═══ Settings overlay（视频独立）══════════════════════════════ -->
     <Transition name="settings">

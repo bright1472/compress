@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 
 const props = defineProps<{
   originalUrl: string;
@@ -9,6 +9,16 @@ const props = defineProps<{
 }>();
 
 const rootRef = ref<HTMLDivElement | null>(null);
+
+// ── Image loading state ──────────────────────────────────────────
+const origLoaded = ref(false);
+const compLoaded = ref(false);
+const isReady = computed(() => origLoaded.value && compLoaded.value);
+watch([() => props.originalUrl, () => props.compressedUrl], () => {
+  origLoaded.value = false;
+  compLoaded.value = false;
+  zoom.value = 1; panX.value = 0; panY.value = 0;
+});
 
 // ── Slider (screen-space %) ─────────────────────────────────────────
 const sliderPct = ref(50);
@@ -157,15 +167,22 @@ onUnmounted(() => { wheelCleanup?.(); });
     @touchmove.prevent="onTouchMove"
     @contextmenu="onContextMenu"
   >
+    <!-- Loading skeleton while images decode -->
+    <div v-if="!isReady" class="ic-skeleton">
+      <div class="ic-skeleton-spinner"></div>
+    </div>
+
     <!-- Zoomable canvas: both images stacked -->
-    <div class="ic-canvas" :style="canvasStyle">
+    <div class="ic-canvas" :style="canvasStyle" :class="{ 'ic-hidden': !isReady }">
       <!-- Compressed image (always full visible) -->
-      <img class="ic-img" :src="props.compressedUrl" draggable="false" />
+      <img class="ic-img" :src="props.compressedUrl" draggable="false" decoding="async" @load="compLoaded = true" />
       <!-- Original image (clipped to left side of divider) -->
       <img
         class="ic-img ic-img-orig"
         :src="props.originalUrl"
         draggable="false"
+        decoding="async"
+        @load="origLoaded = true"
         :style="{ clipPath: `inset(0 ${origClipRight}% 0 0)` }"
       />
     </div>
@@ -219,12 +236,33 @@ onUnmounted(() => { wheelCleanup?.(); });
   -webkit-user-select: none;
 }
 
+/* Loading skeleton */
+.ic-skeleton {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  background: var(--c-bg-overlay, #0a0a0a);
+}
+.ic-skeleton-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.12);
+  border-top-color: rgba(255,255,255,0.6);
+  animation: ic-spin 0.7s linear infinite;
+}
+@keyframes ic-spin { to { transform: rotate(360deg); } }
+
 /* Zoomable canvas */
 .ic-canvas {
   position: absolute;
   inset: 0;
   will-change: transform;
 }
+.ic-hidden { visibility: hidden; }
 
 .ic-img {
   position: absolute;

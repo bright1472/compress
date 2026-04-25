@@ -47,7 +47,8 @@
       "Bash(echo \"EXIT: $?\")",
       "Bash(pnpm search *)",
       "Bash(pnpm build *)",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Read(//Users/jieone/.claude/**)"
     ]
   }
 }

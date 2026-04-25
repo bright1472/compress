@@ -8,6 +8,7 @@ import { t, currentLocale, setLocale } from '../locales/i18n';
 import { logger } from '../engine/logger';
 import { mode, setMode } from '../composables/useModeToggle';
 import { fmtTime } from '../composables/useCompressionQueue';
+import { warmupEncoders } from '../engine/image-engine';
 
 // ── EngineRouter 单例，子组件通过 inject 共享 ────────────────────
 const router = new EngineRouter();

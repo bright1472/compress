@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { ref, watch, inject } from 'vue';
+import { ref, watch, inject, watchEffect } from 'vue';
 import ImageComparison from './ImageComparison.vue';
 import type { EngineRouter } from '../engine/engine-router';
 import { t } from '../locales/i18n';
 import { logger } from '../engine/logger';
 import {
   useCompressionQueue,
-  fileSizeMB, statusPrefix, compressionRatio, fmtTime,
+  fileSizeStr, statusPrefix, compressionRatio, fmtTime,
   type QueueItem,
 } from '../composables/useCompressionQueue';
 
@@ -18,8 +18,8 @@ const emit = defineEmits<{ (e: 'update:showSettings', v: boolean): void }>();
 const router = inject<EngineRouter>('engineRouter')!;
 
 // ── 文件验证 ─────────────────────────────────────────────────────
-const VALID_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/avif', 'image/gif', 'image/bmp', 'image/tiff', 'image/x-icon']);
-const VALID_IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'webp', 'avif', 'gif', 'bmp', 'tiff', 'tif', 'ico']);
+const VALID_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/avif', 'image/gif', 'image/bmp', 'image/tiff', 'image/x-icon', 'image/heic', 'image/heif']);
+const VALID_IMAGE_EXT = new Set(['png', 'jpg', 'jpeg', 'webp', 'avif', 'gif', 'bmp', 'tiff', 'tif', 'ico', 'heic', 'heif']);
 const getExt = (f: File) => f.name.split('.').pop()?.toLowerCase() ?? '';
 const isValidFile = (f: File) => VALID_IMAGE_TYPES.has(f.type) || VALID_IMAGE_EXT.has(getExt(f));
 
@@ -85,6 +85,8 @@ const processItem = async (item: QueueItem) => {
     if (msg.startsWith('FORMAT_UNSUPPORTED:')) {
       const fmt = msg.split(':')[1];
       item.errorMsg = fmt === 'avif' ? t.value('image.avifNotSupported') : t.value('image.webpNotSupported');
+    } else if (/heic|heif/i.test(item.file.name) || /heic|heif/i.test(item.file.type)) {
+      item.errorMsg = t.value('image.heicNotSupported');
     } else {
       item.errorMsg = msg;
     }
@@ -120,6 +122,12 @@ const onDragLeave = () => { isDragging.value = false; };
 
 const closeSettings = () => emit('update:showSettings', false);
 
+// ── Mobile tab ────────────────────────────────────────────────────
+const mobileTab = ref<'queue' | 'stage'>('queue');
+watchEffect(() => {
+  if (q.activeItem.value?.status === 'done') mobileTab.value = 'stage';
+});
+
 defineExpose({
   isRunning: q.isRunning,
   pendingCount: q.pendingCount,
@@ -138,9 +146,9 @@ defineExpose({
       </div>
     </Transition>
 
-    <input type="file" accept="image/png,image/jpeg,image/webp,image/avif,image/gif,image/bmp,image/tiff" multiple hidden ref="fileInputRef" @change="onFileInput" />
+    <input type="file" accept="image/png,image/jpeg,image/webp,image/avif,image/gif,image/bmp,image/tiff,image/heic,image/heif,.heic,.heif" multiple hidden ref="fileInputRef" @change="onFileInput" />
 
-    <div class="app-body">
+    <div class="app-body" :class="q.totalCount.value > 0 ? `mob-${mobileTab}` : ''">
       <aside v-if="q.totalCount.value > 0" class="sidebar">
         <div class="queue-wrap">
           <div class="queue-header">
@@ -184,18 +192,18 @@ defineExpose({
                   <span class="m-capsule img-type">{{ getExt(item.file).toUpperCase() || 'IMG' }}</span>
                   <template v-if="item.status === 'done'">
                     <span class="m-capsule size-group">
-                      <span class="src-val">{{ fileSizeMB(item.file.size) }}</span>
+                      <span class="src-val">{{ fileSizeStr(item.file.size) }}</span>
                       <span class="size-arrow">→</span>
-                      <span class="res-val">{{ fileSizeMB(item.compressedSize) }} MB</span>
+                      <span class="res-val">{{ fileSizeStr(item.compressedSize) }}</span>
                     </span>
                     <span class="m-capsule ratio">↓{{ compressionRatio(item) }}%</span>
                     <span class="m-capsule time">{{ fmtTime(item.elapsed) }}</span>
                   </template>
                   <template v-else-if="item.status === 'processing'">
-                    <span class="m-capsule src">{{ fileSizeMB(item.file.size) }} MB</span>
+                    <span class="m-capsule src">{{ fileSizeStr(item.file.size) }}</span>
                   </template>
                   <template v-else>
-                    <span class="m-capsule src">{{ fileSizeMB(item.file.size) }} MB</span>
+                    <span class="m-capsule src">{{ fileSizeStr(item.file.size) }}</span>
                     <span v-if="item.status === 'error'" class="m-capsule err">ERR</span>
                   </template>
                 </div>
@@ -285,8 +293,8 @@ defineExpose({
           <ImageComparison
             :original-url="q.activeItem.value.originalUrl"
             :compressed-url="q.activeItem.value.compressedUrl ?? ''"
-            :original-label="`ORIGINAL · ${fileSizeMB(q.activeItem.value.file.size)} MB`"
-            :compressed-label="`COMPRESSED · ${fileSizeMB(q.activeItem.value.compressedSize)} MB · ↓${compressionRatio(q.activeItem.value)}%`"
+            :original-label="`ORIGINAL · ${fileSizeStr(q.activeItem.value.file.size)}`"
+            :compressed-label="`COMPRESSED · ${fileSizeStr(q.activeItem.value.compressedSize)} · ↓${compressionRatio(q.activeItem.value)}%`"
           />
         </div>
 
@@ -301,6 +309,19 @@ defineExpose({
         </div>
       </main>
     </div>
+
+    <!-- Mobile tab bar -->
+    <nav v-if="q.totalCount.value > 0" class="mob-tabbar">
+      <button class="mob-tab" :class="{ active: mobileTab === 'queue' }" @click="mobileTab = 'queue'">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><line x1="8" y1="6" x2="21" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="8" y1="12" x2="21" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="8" y1="18" x2="21" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="6" x2="3.01" y2="6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="12" x2="3.01" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="3" y1="18" x2="3.01" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span>{{ t('queue.header') }} · {{ q.doneCount.value }}/{{ q.totalCount.value }}</span>
+      </button>
+      <button class="mob-tab" :class="{ active: mobileTab === 'stage' }" @click="mobileTab = 'stage'">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="9" r="2" stroke="currentColor" stroke-width="2"/><path d="M21 15l-5-5-10 10" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
+        <span>{{ t('mode.image') }}</span>
+        <span v-if="q.activeItem.value?.status === 'done'" class="mob-tab-dot"></span>
+      </button>
+    </nav>
 
     <!-- ═══ Settings overlay（图片独立）══════════════════════════════ -->
     <Transition name="settings">

@@ -137,6 +137,12 @@ export function useCompressionQueue(opts: UseCompressionQueueOptions) {
 }
 
 export const fileSizeMB = (bytes: number) => (bytes / 1048576).toFixed(1);
+export const fileSizeStr = (bytes: number): string => {
+  if (!bytes || bytes <= 0) return '0 B';
+  if (bytes >= 1048576) return `${(bytes / 1048576).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+};
 export const statusPrefix = (item: QueueItem) => {
   if (item.status === 'processing') return '◌';
   if (item.status === 'done') return '✓';

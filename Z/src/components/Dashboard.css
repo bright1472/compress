@@ -388,6 +388,28 @@
 @keyframes sp-in { from { transform: scale(0.92) translateY(8px); opacity: 0; } to { transform: scale(1) translateY(0); opacity: 1; } }
 @keyframes sp-out { from { transform: scale(1); opacity: 1; } to { transform: scale(0.94); opacity: 0; } }
 
+/* ── Browser Compat Banner ──────────────────────────────────────── */
+.browser-compat-banner {
+  position: absolute; top: 0; left: 0; right: 0; z-index: 25;
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 18px;
+  background: rgba(245, 158, 11, 0.12);
+  border-bottom: 1px solid rgba(245, 158, 11, 0.35);
+  color: #f59e0b;
+  backdrop-filter: blur(6px);
+}
+.bcb-text { flex: 1; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.bcb-text strong { font-size: 0.78rem; font-weight: 700; color: var(--c-text-primary); }
+.bcb-text span { font-size: 0.7rem; color: var(--c-text-secondary); }
+.bcb-cta {
+  flex-shrink: 0; font-size: 0.72rem; font-weight: 700;
+  padding: 5px 14px; border-radius: var(--r-sm);
+  background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.4);
+  color: #f59e0b; text-decoration: none; white-space: nowrap;
+  transition: background var(--dur-fast);
+}
+.bcb-cta:hover { background: rgba(245,158,11,0.25); }
+
 /* ── Toast ──────────────────────────────────────────────────────── */
 .toast-reject { position: fixed; top: 60px; right: 20px; z-index: 300; display: flex; align-items: center; gap: 8px; padding: 10px 16px; border-radius: var(--r-md); background: rgba(239,68,68,0.14); border: 1px solid rgba(239,68,68,0.35); color: var(--c-danger); font-size: 0.75rem; font-weight: 600; backdrop-filter: blur(12px); max-width: 380px; }
 .toast-enter-active { animation: slide-up 0.28s ease-out; }
@@ -407,13 +429,9 @@
   .header-center { display: none; }
 }
 @media (max-width: 768px) {
-  .app-body { flex-direction: column-reverse; }
-  .sidebar { width: 100%; max-height: 44vh; border-right: none; border-top: 1px solid var(--c-border); }
   .app-header { padding: 0 var(--sp-md); }
   .brand-sub { display: none; }
   .header-badge { display: none; }
-  .drop-title { font-size: 1.1rem; }
-  .drop-content { padding: var(--sp-lg); }
   .metrics-row { flex-wrap: wrap; }
   .proc-center { padding: var(--sp-lg); }
   .codec-cards { gap: 5px; }
@@ -475,9 +493,67 @@
 }
 
 /* Compressor root containers share shell visuals */
-.compressor-root { display: contents; }
+.compressor-root { flex: 1; display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
 
 @media (max-width: 620px) {
   .mode-pill span:not(.mode-badge) { display: none; }
   .mode-pill { padding: 5px 9px; }
+}
+
+/* ── Mobile Tab Bar ─────────────────────────────────────────────── */
+.mob-tabbar { display: none; }
+
+@media (max-width: 768px) {
+  /* Tab bar */
+  .mob-tabbar {
+    display: flex;
+    flex-shrink: 0;
+    height: 52px;
+    background: var(--c-bg-surface);
+    border-top: 1px solid var(--c-border);
+    z-index: 20;
+  }
+  .mob-tab {
+    flex: 1; display: flex; align-items: center; justify-content: center; gap: 6px;
+    font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; font-weight: 600;
+    color: var(--c-text-muted); background: none; border: none; cursor: pointer;
+    position: relative; transition: color var(--dur-fast);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .mob-tab.active { color: var(--c-accent); }
+  .mob-tab.active::after {
+    content: '';
+    position: absolute; top: 0; left: 20%; right: 20%; height: 2px;
+    background: var(--c-accent); border-radius: 0 0 3px 3px;
+  }
+  .mob-tab-dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--c-success);
+    box-shadow: 0 0 5px var(--c-success); flex-shrink: 0;
+  }
+
+  /* Tab-based show/hide */
+  .app-body.mob-queue .stage { display: none; }
+  .app-body.mob-stage .sidebar { display: none; }
+
+  /* Queue takes full height in queue tab */
+  .app-body.mob-queue { flex-direction: column; }
+  .app-body.mob-queue .sidebar {
+    width: 100%; max-height: none; flex: 1;
+    border-right: none; border-bottom: 1px solid var(--c-border);
+  }
+
+  /* Stage takes full height in stage tab */
+  .app-body.mob-stage { flex-direction: column; }
+  .app-body.mob-stage .stage { flex: 1; }
+
+  /* Always show queue-item action buttons on touch */
+  .qi-actions { opacity: 1; pointer-events: all; }
+
+  /* Larger tap targets for queue item buttons */
+  .qi-btn { width: 34px; height: 34px; }
+
+  /* Drop zone compact on mobile */
+  .drop-features { display: none; }
+  .drop-title { font-size: 1.4rem; }
+  .drop-content { gap: var(--sp-lg); padding: var(--sp-xl); }
 }
