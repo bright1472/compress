@@ -4,15 +4,25 @@ import { EngineRouter } from '../engine/engine-router';
 import VideoCompressor from './VideoCompressor.vue';
 import ImageCompressor from './ImageCompressor.vue';
 import LoggerConsole from './LoggerConsole.vue';
+import AuthModal from './AuthModal.vue';
+import ActivationModal from './ActivationModal.vue';
 import { t, currentLocale, setLocale } from '../locales/i18n';
 import { logger } from '../engine/logger';
 import { mode, setMode } from '../composables/useModeToggle';
 import { fmtTime } from '../composables/useCompressionQueue';
-import { warmupEncoders } from '../engine/image-engine';
+import { isLoggedIn, authUser, logout } from '../composables/useAuth';
+import { usageCount, isSubscribed, usageLimit, syncUsage } from '../composables/useUsageLimit';
+import { limitToastMsg, limitToastVisible } from '../composables/useCompressGate';
 
 // ── EngineRouter 单例，子组件通过 inject 共享 ────────────────────
 const router = new EngineRouter();
 provide('engineRouter', router);
+
+// ── Auth / Usage modals ───────────────────────────────────────────
+const showAuthModal = ref(false);
+const showActivationModal = ref(false);
+provide('openAuthModal', () => { showAuthModal.value = true; });
+provide('openActivationModal', () => { showActivationModal.value = true; });
 
 // ── Theme ────────────────────────────────────────────────────────
 const THEME_KEY = 'titan-theme';
@@ -68,6 +78,7 @@ const handleBeforeUnload = (e: BeforeUnloadEvent) => {
 onMounted(() => {
   document.addEventListener('keydown', onKeydown);
   window.addEventListener('beforeunload', handleBeforeUnload);
+  syncUsage();
 });
 onUnmounted(() => {
   document.removeEventListener('keydown', onKeydown);
@@ -156,6 +167,30 @@ onUnmounted(() => {
         <button class="hdr-locale-btn" @click="setLocale(currentLocale === 'en' ? 'zh' : 'en')">
           {{ currentLocale === 'en' ? '中' : 'EN' }}
         </button>
+
+        <div class="hdr-divider"></div>
+
+        <!-- 未登录 -->
+        <button v-if="!isLoggedIn" class="hdr-auth-btn" @click="showAuthModal = true">
+          {{ t('auth.login') }}
+        </button>
+
+        <!-- 已登录 -->
+        <template v-else>
+          <button
+            v-if="!isSubscribed"
+            class="hdr-usage-btn"
+            :class="{ warn: usageCount >= usageLimit }"
+            :title="t('auth.upgradeHint')"
+            @click="showActivationModal = true"
+          >
+            {{ t('auth.usageDisplay', { n: usageCount, max: usageLimit }) }}
+          </button>
+          <span v-else class="hdr-subscribed-badge">{{ t('auth.subscribed') }}</span>
+          <button class="hdr-user-btn" :title="authUser?.account" @click="logout">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+          </button>
+        </template>
       </div>
     </header>
 
@@ -174,6 +209,21 @@ onUnmounted(() => {
     />
 
     <LoggerConsole :show="showLogger" @close="showLogger = false" />
+
+    <AuthModal v-if="showAuthModal" @close="showAuthModal = false" />
+    <ActivationModal v-if="showActivationModal" @close="showActivationModal = false" />
+
+    <!-- 次数用完提示 -->
+    <Transition name="limit-toast">
+      <div v-if="limitToastVisible" class="limit-toast-banner">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" style="flex-shrink:0">
+          <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/>
+          <line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="12" cy="16" r="1" fill="currentColor"/>
+        </svg>
+        <span>{{ limitToastMsg }}</span>
+      </div>
+    </Transition>
   </div>
 </template>
 

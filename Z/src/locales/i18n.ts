@@ -101,6 +101,7 @@ export const zh = {
     errorHint: '请检查：WebCodecs 浏览器支持 · 视频格式是否有效',
     browserUnsupported: '当前浏览器不支持视频压缩',
     browserUnsupportedHint: '视频压缩需要 WebCodecs API，请使用 Chrome 或 Edge 浏览器',
+    cpuModeHint: '当前使用 CPU 压缩模式，速度较慢，请耐心等待',
     downloadAll: '全部下载 ({n})',
     remainingTime: '剩余 {t}',
   },
@@ -123,7 +124,29 @@ export const zh = {
     refresh: '获取最新日志',
     empty: '暂无日志...',
     copy: '复制',
-  }
+  },
+  auth: {
+    login: '登录',
+    register: '注册',
+    logout: '退出',
+    accountPlaceholder: '账号（3-30位）',
+    passwordPlaceholder: '密码（6-30位）',
+    fillAll: '请填写账号和密码',
+    failed: '登录失败，请重试',
+    usageDisplay: '已用 {n}/{max} 次',
+    subscribed: '∞ 已订阅',
+    upgradeHint: '点击激活订阅',
+  },
+  activation: {
+    title: '激活订阅',
+    sub: '输入淘宝购买的激活码',
+    placeholder: 'COMP-XXXX-XXXX-XXXX',
+    enterKey: '请输入激活码',
+    activate: '立即激活',
+    failed: '激活失败，请检查激活码',
+    success: '激活成功！无限制压缩已解锁',
+    limitReached: '免费次数已用完，请激活订阅',
+  },
 };
 
 export const en = {
@@ -227,6 +250,7 @@ export const en = {
     errorHint: 'Check: WebCodecs browser support · Valid file format',
     browserUnsupported: 'Video compression not supported',
     browserUnsupportedHint: 'Requires WebCodecs API. Please use Chrome or Edge.',
+    cpuModeHint: 'Running in CPU mode — compression will be slower than usual',
     downloadAll: 'Download All ({n})',
     remainingTime: 'Remaining {t}',
   },
@@ -249,12 +273,33 @@ export const en = {
     refresh: 'Fetch latest logs',
     empty: 'No logs yet...',
     copy: 'Copy',
-  }
+  },
+  auth: {
+    login: 'Login',
+    register: 'Register',
+    logout: 'Logout',
+    accountPlaceholder: 'Account (3-30 chars)',
+    passwordPlaceholder: 'Password (6-30 chars)',
+    fillAll: 'Please fill in account and password',
+    failed: 'Login failed, please try again',
+    usageDisplay: '{n}/{max} used',
+    subscribed: '∞ Subscribed',
+    upgradeHint: 'Click to activate',
+  },
+  activation: {
+    title: 'Activate Subscription',
+    sub: 'Enter the activation code from your purchase',
+    placeholder: 'COMP-XXXX-XXXX-XXXX',
+    enterKey: 'Please enter the activation code',
+    activate: 'Activate',
+    failed: 'Activation failed, please check your code',
+    success: 'Activated! Unlimited compression unlocked',
+    limitReached: 'Free quota reached — activate to continue',
+  },
 };
 
 
 export type LocaleInfo = 'en' | 'zh';
-type Dict = typeof zh;
 
 const THEME_KEY = 'titan-locale';
 const savedLocale = localStorage.getItem(THEME_KEY) as LocaleInfo;

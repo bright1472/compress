@@ -1,12 +1,13 @@
 /**
  * src/engine/engine-router.ts
- * 统一调度层 — Video: FFmpeg WASM / WebCodecs | Image: Canvas API
+ * 统一调度层 — 4 档降级路由
  *
- * 策略：
- *  - 图片文件 → ImageEngine（Canvas API，零依赖，毫秒级）
- *  - 视频 ≤ 2GB → FFmpeg WASM（稳定、兼容性好）
- *  - 视频 > 2GB → WebCodecs（流式处理、OPFS 磁盘缓冲、无内存上限）
- *  - 降级：若 WebCodecs 不可用则回退 FFmpeg + 警告用户
+ * Tier 1  WebCodecs + 硬件 GPU 编码器   (Chrome/Edge + 独显/集显)
+ * Tier 2  WebCodecs + 软件 CPU 编码器   (Chrome/Edge，无可用硬件编码器)
+ * Tier 3  FFmpeg WASM 多线程           (有 SharedArrayBuffer 的环境)
+ * Tier 4  FFmpeg WASM 单线程           (iOS Safari / 无 COOP-COEP 的服务器)
+ *
+ * 图片走独立 ImageEngine，与视频引擎完全解耦。
  */
 
 import { FfmpegEngine } from './ffmpeg-engine';
@@ -16,17 +17,16 @@ import { ImageEngine } from './image-engine';
 import type { ImageCompressionOptions } from './image-engine';
 import { logger } from './logger';
 
-// 2GB 阈值（WASM 内存安全上限）
-const WASM_SIZE_LIMIT = 2 * 1024 * 1024 * 1024;
-
-export type EngineType = 'ffmpeg' | 'webcodecs';
+export type EngineType = 'webcodecs-hw' | 'webcodecs-sw' | 'ffmpeg-mt' | 'ffmpeg-st';
 
 export interface RouteDecision {
   engine: EngineType;
   reason: string;
+  tier: 1 | 2 | 3 | 4;
 }
 
-/** 运行时能力探测 */
+// ── 能力探测 ─────────────────────────────────────────────────────────
+
 const detectWebCodecs = (): boolean => {
   try { return typeof VideoEncoder === 'function' && typeof VideoDecoder === 'function'; }
   catch { return false; }
@@ -37,41 +37,89 @@ const detectOPFS = async (): Promise<boolean> => {
   catch { return false; }
 };
 
+const detectSharedArrayBuffer = (): boolean => {
+  try { return typeof SharedArrayBuffer !== 'undefined' && self.crossOriginIsolated === true; }
+  catch { return false; }
+};
+
+// Probe whether a hardware encoder is actually available for H.264.
+// Returns true when the browser can route to a GPU encoder.
+const detectHardwareEncoder = async (): Promise<boolean> => {
+  if (!detectWebCodecs()) return false;
+  try {
+    const result = await VideoEncoder.isConfigSupported({
+      codec: 'avc1.42001f',
+      width: 1280,
+      height: 720,
+      bitrate: 4_000_000,
+      framerate: 30,
+      hardwareAcceleration: 'prefer-hardware',
+    });
+    // Must be explicitly 'prefer-hardware'; 'prefer-software' and undefined both mean CPU.
+    return result.supported === true && result.config?.hardwareAcceleration === 'prefer-hardware';
+  } catch {
+    return false;
+  }
+};
+
+// ── Router ───────────────────────────────────────────────────────────
+
 export class EngineRouter {
   private ffmpegEngine: FfmpegEngine;
   private webCodecsEngine: MediaEngine;
   private imageEngine: ImageEngine;
-  private webCodecsAvailable: boolean | null = null;
+
+  private _tier: (1 | 2 | 3 | 4) | null = null;
+  private _routePromise: Promise<RouteDecision> | null = null;
 
   constructor() {
     this.ffmpegEngine = new FfmpegEngine();
     this.webCodecsEngine = new MediaEngine();
     this.imageEngine = new ImageEngine();
-    // 后台静默预热两个视频引擎，首次压缩无需等待加载
+
+    // Background preload — whichever engine ends up being used will be warm.
     this.ffmpegEngine.preload();
     this.webCodecsEngine.warmup().catch(() => {});
   }
 
-  /** 根据浏览器能力自动选择引擎 (优先 WebCodecs 追求极致速度) */
-  async route(fileSize: number): Promise<RouteDecision> {
-    if (this.webCodecsAvailable === null) {
-      this.webCodecsAvailable = detectWebCodecs() && await detectOPFS();
-    }
+  /** Resolve and cache the tier. Safe to call multiple times. */
+  async route(_fileSize?: number): Promise<RouteDecision> {
+    if (this._routePromise) return this._routePromise;
 
-    // 突破 2GB 限速边界：只要浏览器支持 WebCodecs，全面启用硬件加速流式引擎
-    if (this.webCodecsAvailable) {
-      return { engine: 'webcodecs', reason: `浏览器支持硬件加速，已全面启用 WebCodecs 极速引擎` };
-    }
+    this._routePromise = (async (): Promise<RouteDecision> => {
+      const hasWebCodecs = detectWebCodecs();
+      const hasOPFS = hasWebCodecs ? await detectOPFS() : false;
 
-    // 降级回退
-    if (fileSize <= WASM_SIZE_LIMIT) {
-      return { engine: 'ffmpeg', reason: `设备不支持 WebCodecs，使用 FFmpeg WASM (因环境受限速度较慢)` };
-    }
+      if (hasWebCodecs && hasOPFS) {
+        const hasHW = await detectHardwareEncoder();
+        if (hasHW) {
+          this._tier = 1;
+          return { engine: 'webcodecs-hw', tier: 1, reason: 'GPU 硬件加速 · WebCodecs + 硬件编码器' };
+        }
+        this._tier = 2;
+        return { engine: 'webcodecs-sw', tier: 2, reason: 'CPU 软件编码 · WebCodecs（无可用 GPU 编码器）' };
+      }
 
-    return { engine: 'ffmpeg', reason: `设备不支持且文件超限，强制使用 FFmpeg (极大概率发生内存溢出)` };
+      if (detectSharedArrayBuffer()) {
+        this._tier = 3;
+        return { engine: 'ffmpeg-mt', tier: 3, reason: 'CPU 多线程 · FFmpeg WASM（兼容模式）' };
+      }
+
+      this._tier = 4;
+      return { engine: 'ffmpeg-st', tier: 4, reason: 'CPU 单线程 · FFmpeg WASM（iOS Safari / 通用兼容）' };
+    })();
+
+    return this._routePromise;
   }
 
-  /** 统一压缩入口 */
+  /** Current tier (null until first route() call resolves). */
+  get tier(): (1 | 2 | 3 | 4) | null { return this._tier; }
+
+  /** True when hardware GPU encoding is being used (tier 1). */
+  get isHardwareAccelerated(): boolean { return this._tier === 1; }
+
+  // ── 统一压缩入口 ────────────────────────────────────────────────────
+
   async compress(
     file: File,
     options: { codec: string; crf: number; preset: string },
@@ -80,7 +128,7 @@ export class EngineRouter {
     fileType?: 'video' | 'image',
     imageOptions?: ImageCompressionOptions,
   ): Promise<Blob> {
-    // ── 图片路径（Canvas API，毫秒级，无需进度回调）────────────────
+    // ── 图片路径 ─────────────────────────────────────────────────────
     if (fileType === 'image') {
       onProgress(10);
       const blob = await this.imageEngine.compress(file, imageOptions ?? { outputFormat: 'original', quality: 85 });
@@ -88,11 +136,12 @@ export class EngineRouter {
       return blob;
     }
 
-    // ── 视频路径（原有逻辑完全不变）─────────────────────────────────
+    // ── 视频路径 ─────────────────────────────────────────────────────
     const decision = await this.route(file.size);
     onRouteDecision?.(decision);
 
-    if (decision.engine === 'webcodecs') {
+    // Tier 1 & 2 — WebCodecs
+    if (decision.engine === 'webcodecs-hw' || decision.engine === 'webcodecs-sw') {
       try {
         const codecMap: Record<string, string> = { libx264: 'libx264', libx265: 'libx265', av1: 'av1' };
         const resultFile = await this.webCodecsEngine.processLargeVideo(
@@ -101,19 +150,38 @@ export class EngineRouter {
           (data) => onProgress(Math.round(data.progress)),
         );
         return resultFile as unknown as Blob;
-      } catch (e: any) {
-        logger.warn('system', `WebCodecs crash detected: ${e.message}. Auto-falling back to FFmpeg WASM.`);
-        onRouteDecision?.({ engine: 'ffmpeg', reason: `硬件加速引擎失败，已自动降级至 FFmpeg (速度可能降低)` });
-        // continue to FFmpeg path below...
+      } catch (e: unknown) {
+        const msg = e instanceof Error ? e.message : String(e);
+        logger.warn('system', `WebCodecs crash: ${msg}. Falling back to FFmpeg WASM.`);
+        const fallbackTier: 3 | 4 = detectSharedArrayBuffer() ? 3 : 4;
+        this._tier = fallbackTier;
+        const fallback: RouteDecision = {
+          engine: fallbackTier === 3 ? 'ffmpeg-mt' : 'ffmpeg-st',
+          tier: fallbackTier,
+          reason: `硬件加速引擎失败，自动降级至 FFmpeg WASM（CPU ${fallbackTier === 3 ? '多线程' : '单线程'}）`,
+        };
+        // Fix (HIGH): pin the promise to the fallback so concurrent calls don't re-probe WebCodecs.
+        this._routePromise = Promise.resolve(fallback);
+        onRouteDecision?.(fallback);
+        // Fall through to FFmpeg below.
       }
     }
 
-    // FFmpeg path (used via direct route or WebCodecs fallback)
-    const ffmpegCodecMap: Record<string, CompressionOptions['codec']> = { libx264: 'libx264', libx265: 'libx265', av1: 'libaom-av1' };
+    // Tier 3 & 4 — FFmpeg WASM (multi or single thread, auto-selected inside FfmpegEngine)
+    const ffmpegCodecMap: Record<string, CompressionOptions['codec']> = {
+      libx264: 'libx264',
+      libx265: 'libx265',
+      av1: 'libaom-av1',
+    };
     if (!this.ffmpegEngine.isReady()) await this.ffmpegEngine.load();
     return this.ffmpegEngine.compress(
       file,
-      { codec: ffmpegCodecMap[options.codec] ?? 'libx264', crf: options.crf, preset: options.preset as CompressionOptions['preset'], outputFormat: 'mp4' },
+      {
+        codec: ffmpegCodecMap[options.codec] ?? 'libx264',
+        crf: options.crf,
+        preset: options.preset as CompressionOptions['preset'],
+        outputFormat: 'mp4',
+      },
       onProgress,
     );
   }

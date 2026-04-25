@@ -108,12 +108,15 @@ export function useCompressionQueue(opts: UseCompressionQueueOptions) {
 
   const processQueue = async () => {
     isRunning.value = true;
-    while (true) {
-      const next = queue.value.find(i => i.status === 'pending');
-      if (!next) break;
-      await opts.processItem(next);
+    try {
+      while (true) {
+        const next = queue.value.find(i => i.status === 'pending');
+        if (!next) break;
+        await opts.processItem(next);
+      }
+    } finally {
+      isRunning.value = false;
     }
-    isRunning.value = false;
   };
 
   const downloadItem = (item: QueueItem) => {

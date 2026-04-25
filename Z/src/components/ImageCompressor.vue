@@ -9,6 +9,9 @@ import {
   fileSizeStr, statusPrefix, compressionRatio, fmtTime,
   type QueueItem,
 } from '../composables/useCompressionQueue';
+import { isLoggedIn } from '../composables/useAuth';
+import { canCompress, afterCompress } from '../composables/useUsageLimit';
+import { checkAndGate } from '../composables/useCompressGate';
 
 type ImageFmt = 'original' | 'png' | 'jpg' | 'webp' | 'avif';
 
@@ -16,6 +19,13 @@ const props = defineProps<{ showSettings: boolean }>();
 const emit = defineEmits<{ (e: 'update:showSettings', v: boolean): void }>();
 
 const router = inject<EngineRouter>('engineRouter')!;
+const openAuthModal = inject<() => void>('openAuthModal', () => {});
+const openActivationModal = inject<() => void>('openActivationModal', () => {});
+
+const handleStart = () => {
+  if (!checkAndGate(openAuthModal, openActivationModal)) return;
+  q.processQueue();
+};
 
 // ── 文件验证 ─────────────────────────────────────────────────────
 const VALID_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/avif', 'image/gif', 'image/bmp', 'image/tiff', 'image/x-icon', 'image/heic', 'image/heif']);
@@ -47,6 +57,9 @@ const imageFormatOptions: { value: ImageFmt; label: string }[] = [
 
 // ── 处理 ──────────────────────────────────────────────────────────
 const processItem = async (item: QueueItem) => {
+  if (!checkAndGate(openAuthModal, openActivationModal)) {
+    throw new Error('QUOTA_EXCEEDED');
+  }
   item.status = 'processing';
   q.activeItemId.value = item.id;
   item.progress = 0;
@@ -74,6 +87,7 @@ const processItem = async (item: QueueItem) => {
     item.elapsed = (Date.now() - item.startTime) / 1000;
     item.progress = 100;
     item.status = 'done';
+    afterCompress();
 
     const originalMB = (item.file.size / 1048576).toFixed(2);
     const compressedMB = (item.compressedSize / 1048576).toFixed(2);
@@ -228,7 +242,7 @@ defineExpose({
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             {{ t('image.addFiles') }}
           </button>
-          <button v-if="q.canStart.value" class="btn-primary" @click="q.processQueue">
+          <button v-if="q.canStart.value" class="btn-primary" @click="handleStart">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>
             {{ t('process.start') }}{{ q.pendingCount.value > 1 ? ` (${q.pendingCount.value})` : '' }}
           </button>

@@ -11,46 +11,61 @@ export interface CompressionOptions {
 
 export type ProgressCallback = (progress: number) => void;
 
-const CORE_PATH = '/ffmpeg-mt';
+// Multi-thread requires SharedArrayBuffer (crossOriginIsolated).
+// Single-thread works in every browser including iOS Safari.
+const isMultiThreaded = (): boolean => {
+  try { return typeof SharedArrayBuffer !== 'undefined' && self.crossOriginIsolated === true; }
+  catch { return false; }
+};
+
+const corePath = () => isMultiThreaded() ? '/ffmpeg-mt' : '/ffmpeg';
 
 export class FfmpegEngine {
   private ffmpeg: FFmpeg;
   private loaded = false;
   private loadPromise: Promise<void> | null = null;
   private progressHandler: ((e: { progress: number }) => void) | null = null;
+  private _isMultiThreaded = false;
 
   constructor() {
     this.ffmpeg = new FFmpeg();
   }
 
-  /**
-   * 预加载 WASM 二进制（后台静默下载并初始化）。
-   * 页面空闲时调用即可，首次压缩无需等待 WASM 加载。
-   */
+  get threaded(): boolean { return this._isMultiThreaded; }
+
   preload(): void {
-    this.load(); // fire-and-forget
+    this.load();
   }
 
   async load(): Promise<void> {
     if (this.loaded) return;
     if (this.loadPromise) return this.loadPromise;
 
+    this._isMultiThreaded = isMultiThreaded();
+    const path = corePath();
+
     this.loadPromise = (async () => {
-      this.ffmpeg.on('log', ({ message }) => console.log('[FFmpeg]', message));
-      await this.ffmpeg.load({
-        coreURL: await toBlobURL(`${CORE_PATH}/ffmpeg-core.js`, 'text/javascript'),
-        wasmURL: await toBlobURL(`${CORE_PATH}/ffmpeg-core.wasm`, 'application/wasm'),
-        workerURL: await toBlobURL(`${CORE_PATH}/ffmpeg-core.worker.js`, 'text/javascript'),
-      });
+      const loadArgs: Parameters<FFmpeg['load']>[0] = {
+        coreURL: await toBlobURL(`${path}/ffmpeg-core.js`, 'text/javascript'),
+        wasmURL: await toBlobURL(`${path}/ffmpeg-core.wasm`, 'application/wasm'),
+      };
+      // Single-threaded core has no worker file; skip it to avoid 404.
+      if (this._isMultiThreaded) {
+        loadArgs.workerURL = await toBlobURL(`${path}/ffmpeg-core.worker.js`, 'text/javascript');
+      }
+      await this.ffmpeg.load(loadArgs);
       this.loaded = true;
-    })();
+    })().catch((e: unknown) => {
+      // Clear the cached promise so callers can retry after a transient network error.
+      this.loadPromise = null;
+      throw e;
+    });
     return this.loadPromise;
   }
 
   async compress(inputFile: File, options: CompressionOptions, onProgress?: ProgressCallback): Promise<Blob> {
     if (!this.loaded) await this.load();
 
-    // 清除旧 listener 防止泄漏
     if (this.progressHandler) this.ffmpeg.off('progress', this.progressHandler);
     this.progressHandler = ({ progress }) => onProgress?.(Math.round(progress * 100));
     this.ffmpeg.on('progress', this.progressHandler);
@@ -61,16 +76,10 @@ export class FfmpegEngine {
 
     await this.ffmpeg.writeFile(inputName, await fetchFile(inputFile));
     const args = this.buildArgs(inputName, outputName, options);
-    console.log('[FFmpegEngine] exec:', args.join(' '));
 
-    const execStart = performance.now();
     await this.ffmpeg.exec(args);
-    const execMs = ((performance.now() - execStart) / 1000).toFixed(2);
-    const inputMB = (inputFile.size / 1048576).toFixed(1);
-    console.log(`[FFmpegEngine] ${options.codec} done: ${execMs}s (${inputMB} MB)`);
     const data = await this.ffmpeg.readFile(outputName);
 
-    // 清理 FS
     await this.ffmpeg.deleteFile(inputName).catch(() => {});
     await this.ffmpeg.deleteFile(outputName).catch(() => {});
 
@@ -78,16 +87,18 @@ export class FfmpegEngine {
   }
 
   private buildArgs(input: string, output: string, opt: CompressionOptions): string[] {
-    const base = ['-hide_banner', '-loglevel', 'info'];
+    const base = ['-hide_banner', '-loglevel', 'error'];
+    // Single-threaded: set threads=1 explicitly so FFmpeg doesn't try to spawn workers.
+    const threadFlag = this._isMultiThreaded ? ['-threads', '0'] : ['-threads', '1'];
 
     if (opt.codec === 'libx264') {
-      return [...base, '-i', input, '-c:v', 'libx264', '-crf', String(opt.crf), '-preset', opt.preset, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', '-threads', '0', '-y', output];
+      return [...base, '-i', input, '-c:v', 'libx264', '-crf', String(opt.crf), '-preset', opt.preset, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', ...threadFlag, '-y', output];
     }
     if (opt.codec === 'libx265') {
-      return [...base, '-i', input, '-c:v', 'libx265', '-crf', String(opt.crf), '-preset', opt.preset, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-tag:v', 'hvc1', '-y', output];
+      return [...base, '-i', input, '-c:v', 'libx265', '-crf', String(opt.crf), '-preset', opt.preset, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-tag:v', 'hvc1', ...threadFlag, '-y', output];
     }
-    // AV1
-    return [...base, '-i', input, '-c:v', 'libaom-av1', '-cpu-used', '8', '-crf', String(opt.crf), '-b:v', '0', '-pix_fmt', 'yuv420p', '-c:a', 'libopus', '-y', output];
+    // AV1 — cpu-used=8 for speed, single-thread explicit
+    return [...base, '-i', input, '-c:v', 'libaom-av1', '-cpu-used', '8', '-crf', String(opt.crf), '-b:v', '0', '-pix_fmt', 'yuv420p', '-c:a', 'libopus', ...threadFlag, '-y', output];
   }
 
   isReady(): boolean { return this.loaded; }

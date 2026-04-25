@@ -9,11 +9,23 @@ import {
   fileSizeStr, statusPrefix, compressionRatio, fmtTime,
   type QueueItem,
 } from '../composables/useCompressionQueue';
+import { isLoggedIn } from '../composables/useAuth';
+import { canCompress, afterCompress } from '../composables/useUsageLimit';
 
 const props = defineProps<{ showSettings: boolean }>();
 const emit = defineEmits<{ (e: 'update:showSettings', v: boolean): void }>();
 
 const router = inject<EngineRouter>('engineRouter')!;
+const openAuthModal = inject<() => void>('openAuthModal', () => {});
+const openActivationModal = inject<() => void>('openActivationModal', () => {});
+
+const handleStart = () => {
+  if (!canCompress.value) {
+    isLoggedIn.value ? openActivationModal() : openAuthModal();
+    return;
+  }
+  q.processQueue();
+};
 
 // ── 文件验证 ─────────────────────────────────────────────────────
 const VALID_VIDEO_TYPES = new Set(['video/mp4', 'video/quicktime', 'video/x-matroska', 'video/avi', 'video/webm', 'video/x-flv', 'video/x-ms-wmv', 'video/x-msvideo', 'video/3gpp', 'video/ogg']);
@@ -60,9 +72,26 @@ const crfSliderStyle = computed(() => {
 
 // ── 引擎状态 ──────────────────────────────────────────────────────
 const engineLoading = ref(false);
-const routeInfo = ref('');
+const currentTier = ref<1 | 2 | 3 | 4 | null>(null);
+
+const tierLabel = computed(() => {
+  switch (currentTier.value) {
+    case 1: return { text: 'GPU HW', color: '#22c55e' };
+    case 2: return { text: 'GPU SW', color: '#f97316' };
+    case 3: return { text: 'CPU MT', color: '#f59e0b' };
+    case 4: return { text: 'CPU ST', color: '#ef4444' };
+    default: return null;
+  }
+});
+
+// true only for tiers 3 & 4 (pure CPU, no WebCodecs)
+const isCpuMode = computed(() => currentTier.value !== null && currentTier.value >= 3);
 
 const processItem = async (item: QueueItem) => {
+  if (!canCompress.value) {
+    isLoggedIn.value ? openActivationModal() : openAuthModal();
+    throw new Error('QUOTA_EXCEEDED');
+  }
   item.status = 'processing';
   q.activeItemId.value = item.id;
   item.progress = 0;
@@ -81,9 +110,8 @@ const processItem = async (item: QueueItem) => {
         item.remaining = pct > 2 ? (elapsed / pct) * (100 - pct) : 0;
       },
       (decision) => {
-        item.engineUsed = decision.engine === 'ffmpeg' ? 'FFmpeg WASM' : 'WebCodecs';
-        routeInfo.value = decision.reason;
-        engineLoading.value = false;
+        currentTier.value = decision.tier;
+        item.engineUsed = decision.reason;
       },
       'video',
     );
@@ -93,15 +121,17 @@ const processItem = async (item: QueueItem) => {
     item.elapsed = (Date.now() - item.startTime) / 1000;
     item.progress = 100;
     item.status = 'done';
+    afterCompress();
 
     const originalMB = (item.file.size / 1048576).toFixed(2);
     const compressedMB = (item.compressedSize / 1048576).toFixed(2);
     const ratio = ((item.compressedSize / item.file.size) * 100).toFixed(1);
     const avgSpeed = (item.file.size / 1048576 / item.elapsed).toFixed(2);
     logger.info('system', `[video][Benchmark] ${item.file.name} | ${originalMB}MB -> ${compressedMB}MB | ${item.elapsed.toFixed(1)}s | ${avgSpeed} MB/s | Ratio: ${ratio}% | Engine: ${item.engineUsed}`);
-  } catch (e: any) {
+  } catch (e: unknown) {
     item.status = 'error';
-    item.errorMsg = e.message || t.value('process.encodingFailed');
+    item.errorMsg = e instanceof Error ? e.message : t.value('process.encodingFailed');
+  } finally {
     engineLoading.value = false;
   }
 };
@@ -129,9 +159,6 @@ const onDragOver = (e: DragEvent) => { e.preventDefault(); isDragging.value = tr
 const onDragLeave = () => { isDragging.value = false; };
 
 const closeSettings = () => emit('update:showSettings', false);
-
-// ── 浏览器兼容检测 ────────────────────────────────────────────────
-const webCodecsSupported = typeof window !== 'undefined' && 'VideoEncoder' in window;
 
 // ── Mobile tab ────────────────────────────────────────────────────
 const mobileTab = ref<'queue' | 'stage'>('queue');
@@ -169,8 +196,9 @@ defineExpose({
               <span class="queue-label">{{ t('queue.header') }}</span>
               <span class="qh-count">{{ q.doneCount.value }}/{{ q.totalCount.value }}</span>
             </div>
-            <div class="qh-right" v-if="q.doneCount.value > 0">
-              <span class="qh-saved-pill">↓ {{ q.totalSavedMB.value.toFixed(1) }} MB</span>
+            <div class="qh-right">
+              <span v-if="tierLabel" class="qh-tier-pill" :style="{ color: tierLabel.color, borderColor: tierLabel.color + '44' }">{{ tierLabel.text }}</span>
+              <span v-if="q.doneCount.value > 0" class="qh-saved-pill">↓ {{ q.totalSavedMB.value.toFixed(1) }} MB</span>
             </div>
           </div>
 
@@ -241,7 +269,7 @@ defineExpose({
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             {{ t('queue.addFiles') }}
           </button>
-          <button v-if="q.canStart.value" class="btn-primary" @click="q.processQueue">
+          <button v-if="q.canStart.value" class="btn-primary" @click="handleStart">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>
             {{ t('process.start') }}{{ q.pendingCount.value > 1 ? ` (${q.pendingCount.value})` : '' }}
           </button>
@@ -261,17 +289,13 @@ defineExpose({
 
       <!-- Main stage -->
       <main class="stage" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
-        <!-- 浏览器不支持 WebCodecs 时的前置提示 -->
-        <div v-if="!webCodecsSupported" class="browser-compat-banner">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" stroke="currentColor" stroke-width="1.8"/><line x1="12" y1="9" x2="12" y2="13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="12" y1="17" x2="12.01" y2="17" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/></svg>
-          <div class="bcb-text">
-            <strong>{{ t('process.browserUnsupported') }}</strong>
-            <span>{{ t('process.browserUnsupportedHint') }}</span>
+        <!-- CPU 模式柔性提示：仅在路由确定为 CPU 后出现，不阻止使用 -->
+        <Transition name="toast">
+          <div v-if="isCpuMode" class="cpu-mode-banner">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M9 9h6v6H9z" fill="currentColor" opacity=".4"/><path d="M2 9h2M2 15h2M20 9h2M20 15h2M9 2v2M15 2v2M9 20v2M15 20v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            <span>{{ t('process.cpuModeHint') }}</span>
           </div>
-          <a href="https://www.google.com/chrome/" target="_blank" rel="noopener" class="bcb-cta">
-            {{ currentLocale === 'zh' ? '下载 Chrome' : 'Get Chrome' }}
-          </a>
-        </div>
+        </Transition>
         <div v-if="q.totalCount.value === 0" class="drop-zone" :class="{ dragging: isDragging }" @click="fileInputRef?.click()">
           <div class="drop-content">
             <div class="drop-icon-wrap">

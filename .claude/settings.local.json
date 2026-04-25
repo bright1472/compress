@@ -48,7 +48,10 @@
       "Bash(pnpm search *)",
       "Bash(pnpm build *)",
       "Bash(grep -v \"^$\")",
-      "Read(//Users/jieone/.claude/**)"
+      "Read(//Users/jieone/.claude/**)",
+      "Bash(./node_modules/.bin/vue-tsc --noEmit)",
+      "Bash(grep -E \"^d|\\\\.json$|\\\\.ts$\")",
+      "Bash(xargs cat *)"
     ]
   }
 }
