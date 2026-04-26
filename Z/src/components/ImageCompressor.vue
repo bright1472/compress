@@ -248,7 +248,7 @@ defineExpose({
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
                 <button v-if="item.status === 'processing' && !q.isCancellingItem.value" class="qi-btn cancel" @click.stop="q.cancelCurrentItem()" :title="t('queue.cancelItem')">
-                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></svg>
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
                 <button v-if="item.status !== 'processing'" class="qi-btn rm" @click.stop="q.removeItem(item.id)" :title="t('queue.remove')">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>

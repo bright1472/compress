@@ -92,9 +92,9 @@
 .qi-progress-bar { height: 2px; background: var(--c-bg-elevated); border-radius: 2px; overflow: hidden; margin-top: 2px; }
 .qi-progress-fill { height: 100%; background: var(--c-accent); border-radius: 2px; transition: width 0.3s var(--ease-out); }
 
-.qi-actions { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; flex-shrink: 0; opacity: 0; transition: all var(--dur-fast); pointer-events: none; z-index: 10; padding: 4px; border-radius: var(--r-sm); background: var(--c-bg-surface); backdrop-filter: blur(10px); border: 0.5px solid var(--c-border); box-shadow: 0 4px 12px rgba(0,0,0,0.1); }
+.qi-actions { position: absolute; right: 8px; top: 50%; transform: translateY(-50%); display: flex; gap: 4px; flex-shrink: 0; opacity: 0; transition: all var(--dur-fast); pointer-events: none; z-index: 10; padding: 2px; }
 .queue-item:hover .qi-actions { opacity: 1; pointer-events: all; }
-.qi-btn { width: 24px; height: 24px; border-radius: var(--r-sm); display: flex; align-items: center; justify-content: center; background: none; transition: all var(--dur-fast); }
+.qi-btn { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: none; transition: all var(--dur-fast); }
 .qi-btn.dl { color: var(--c-text-muted); }
 .qi-btn.dl:hover { background: var(--c-accent-subtle); color: var(--c-accent); }
 .qi-btn.rm { color: var(--c-text-muted); }
@@ -400,7 +400,8 @@
   .qi-actions { opacity: 1; pointer-events: all; }
 
   /* Larger tap targets for queue item buttons */
-  .qi-btn { width: 34px; height: 34px; }
+  .qi-btn { width: 32px; height: 32px; }
+  .qi-btn.cancel { width: 28px; height: 28px; }
 
   /* Drop zone compact on mobile */
   .drop-features { display: none; }
@@ -421,8 +422,8 @@
 .hdr-user-btn:hover { color: var(--c-text); border-color: var(--c-text-muted); }
 
 /* Per-item cancel button in queue */
-.qi-btn.cancel { color: var(--c-text-muted); }
-.qi-btn.cancel:hover { background: var(--c-danger-subtle); color: var(--c-danger); }
+.qi-btn.cancel { width: 24px; height: 24px; border-radius: 50%; color: var(--c-danger); background: rgba(239,68,68,0.12); border: 0.5px solid rgba(239,68,68,0.22); transition: all var(--dur-fast) var(--ease-spring); }
+.qi-btn.cancel:hover { background: var(--c-danger); color: #fff; border-color: var(--c-danger); transform: scale(1.1); }
 .queue-item.processing .qi-actions { opacity: 1; pointer-events: all; }
 
 /* Output directory picker (settings panel) */
