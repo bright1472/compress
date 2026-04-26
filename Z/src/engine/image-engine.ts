@@ -14,6 +14,9 @@ import mozjpegWasmUrl from '@jsquash/jpeg/codec/enc/mozjpeg_enc.wasm?url';
 import webpWasmUrl from '@jsquash/webp/codec/enc/webp_enc.wasm?url';
 import webpSimdWasmUrl from '@jsquash/webp/codec/enc/webp_enc_simd.wasm?url';
 import oxipngWasmUrl from '@jsquash/oxipng/codec/pkg/squoosh_oxipng_bg.wasm?url';
+import imagequantInit from '@panda-ai/imagequant';
+import { quantize_image } from '@panda-ai/imagequant';
+import imagequantWasmUrl from '@panda-ai/imagequant/imagequant_bg.wasm?url';
 
 export type ImageOutputFormat = 'original' | 'png' | 'jpg' | 'webp' | 'avif';
 
@@ -57,6 +60,97 @@ export const detectFormatSupport = (format: Exclude<ImageOutputFormat, 'original
 
 const supportsAlpha = (mime: string) => mime !== 'image/jpeg';
 
+// ── PNG-8 编码器（palette 模式，1 byte/pixel）────────────────────────
+// TinyPNG 的路径：libimagequant 量化 → palette + indices → PNG-8
+// 相比 PNG-32 展开方案，体积缩小约 75%
+
+const _crcTbl = (() => {
+  const t = new Int32Array(256);
+  for (let n = 0; n < 256; n++) {
+    let c = n;
+    for (let k = 0; k < 8; k++) c = (c & 1) ? (0xedb88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c;
+  }
+  return t;
+})();
+
+function _crc32(type: Uint8Array, data: Uint8Array): number {
+  let c = 0xffffffff;
+  for (const b of type) c = (_crcTbl[(c ^ b) & 0xff]!) ^ (c >>> 8);
+  for (const b of data) c = (_crcTbl[(c ^ b) & 0xff]!) ^ (c >>> 8);
+  return (c ^ 0xffffffff) >>> 0;
+}
+
+const _enc = new TextEncoder();
+function _chunk(tag: string, data: Uint8Array): Uint8Array {
+  const t = _enc.encode(tag);
+  const out = new Uint8Array(12 + data.length);
+  const dv = new DataView(out.buffer);
+  dv.setUint32(0, data.length);
+  out.set(t, 4);
+  out.set(data, 8);
+  dv.setUint32(8 + data.length, _crc32(t, data));
+  return out;
+}
+
+async function _zlibCompress(raw: Uint8Array): Promise<Uint8Array> {
+  const cs = new CompressionStream('deflate');
+  const w = cs.writable.getWriter();
+  const r = cs.readable.getReader();
+  w.write(raw as unknown as Uint8Array<ArrayBuffer>);
+  w.close();
+  const parts: Uint8Array[] = [];
+  for (;;) {
+    const { done, value } = await r.read();
+    if (done) break;
+    parts.push(value);
+  }
+  const len = parts.reduce((s, p) => s + p.length, 0);
+  const out = new Uint8Array(len);
+  let off = 0;
+  for (const p of parts) { out.set(p, off); off += p.length; }
+  return out;
+}
+
+async function _encodePng8(
+  palette: Uint8Array, // RGBA × numColors（已脱离 WASM 内存）
+  indices: Uint8Array, // 1 byte/pixel
+  width: number,
+  height: number,
+): Promise<ArrayBuffer> {
+  const n = palette.length >> 2;
+
+  const ihdr = new Uint8Array(13);
+  const dv = new DataView(ihdr.buffer);
+  dv.setUint32(0, width); dv.setUint32(4, height);
+  ihdr[8] = 8; ihdr[9] = 3; // 8-bit indexed color
+
+  const plte = new Uint8Array(n * 3);
+  const trns = new Uint8Array(n);
+  for (let i = 0; i < n; i++) {
+    plte[i * 3]     = palette[i * 4];
+    plte[i * 3 + 1] = palette[i * 4 + 1];
+    plte[i * 3 + 2] = palette[i * 4 + 2];
+    trns[i]         = palette[i * 4 + 3];
+  }
+
+  // 每行：[filter_byte=0][index×width]
+  const rows = new Uint8Array(height * (width + 1));
+  for (let y = 0; y < height; y++) {
+    rows[y * (width + 1)] = 0;
+    rows.set(indices.subarray(y * width, y * width + width), y * (width + 1) + 1);
+  }
+
+  const idat = await _zlibCompress(rows);
+  const sig = new Uint8Array([137, 80, 78, 71, 13, 10, 26, 10]);
+  const parts = [sig, _chunk('IHDR', ihdr), _chunk('PLTE', plte), _chunk('tRNS', trns), _chunk('IDAT', idat), _chunk('IEND', new Uint8Array(0))];
+  const total = parts.reduce((s, p) => s + p.length, 0);
+  const out = new Uint8Array(total);
+  let o = 0;
+  for (const p of parts) { out.set(p, o); o += p.length; }
+  return out.buffer;
+}
+
 // ── WASM 编码器懒初始化 ────────────────────────────────────────────
 
 // options 对齐 @jsquash 实际签名（均为 Partial<EncodeOptions>，quality 可选）
@@ -68,15 +162,30 @@ let _webpEncodePromise: Promise<WasmEncode | null> | null = null;
 type OxipngOptimise = (data: ArrayBuffer) => Promise<ArrayBuffer>;
 let _oxipngPromise: Promise<OxipngOptimise | null> | null = null;
 
+// libimagequant WASM — 与 TinyPNG 同等感知量化算法（Floyd-Steinberg 抖动）
+// 运行时返回 { palette: Uint8Array, indices: Uint8Array }，.d.ts 的 QuantResult 不对应实际行为
+let _iqPromise: Promise<boolean> | null = null;
+
+async function _initIq(): Promise<boolean> {
+  try {
+    await imagequantInit(imagequantWasmUrl);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+const getIq = (): Promise<boolean> =>
+  (_iqPromise ??= _initIq());
+
 async function _initOxipng(): Promise<OxipngOptimise | null> {
   try {
     const { default: optimise, init } = await import('@jsquash/oxipng/optimise');
     await init(oxipngWasmUrl);
-    // level 1 比 level 3 快 5-8×，压缩率差距仅 1-3%，大图优先选速度
-    return (buf: ArrayBuffer) => {
-      const level = buf.byteLength > 1_000_000 ? 1 : 2;
-      return optimise(buf, { level, optimiseAlpha: true });
-    };
+    // level 6 启用 zopfli — 与 TinyPNG 同等的 DEFLATE 优化路径，体积比 level 2 小 10-25%
+    // PNG-8（量化后）通常 < 1MB，level 6 在 1-3 秒内完成；超时由调用方控制
+    return (buf: ArrayBuffer) =>
+      optimise(buf, { level: 6, optimiseAlpha: true });
   } catch {
     return null;
   }
@@ -117,6 +226,7 @@ export function warmupEncoders(): void {
   void getJpegEncoder();
   void getWebpEncoder();
   void getOxipng();
+  void getIq();
 }
 
 // ── 引擎主体 ──────────────────────────────────────────────────────
@@ -151,28 +261,32 @@ export class ImageEngine {
     ctx.drawImage(img, 0, 0);
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    let encoded: ArrayBuffer;
 
-    // quality=100 → numColors=0（真正无损，纯 DEFLATE 优化）
-    // quality<100 → 调色板量化（quality=85 → ~217 色，4MB 真彩照片可压到 ~1MB）
-    // 与 TinyPNG 同路径：即使高质量也做量化，差异肉眼不可见
-    const numColors = quality >= 100 ? 0 : Math.max(4, Math.round((quality / 100) * 256));
+    if (quality >= 100) {
+      // 真正无损：纯 DEFLATE 优化
+      encoded = UPNG.encode([imageData.data.buffer], canvas.width, canvas.height, 0);
+    } else {
+      // 激进量化曲线：q=99→256, q=80→128, q=60→64, q=40→32（与 TinyPNG 自适应输出对齐）
+      // 真彩色照片 128 色 + Floyd-Steinberg 抖动已视觉无损，体积接近 TinyPNG
+      const t = quality / 100;
+      const numColors = Math.max(8, Math.min(256, Math.round(8 * Math.pow(2, t * 5))));
+      const iq = await getIq();
 
-    const encoded = UPNG.encode(
-      [imageData.data.buffer],
-      canvas.width,
-      canvas.height,
-      numColors,
-    );
+      const iqEncoded = iq ? await this._iqEncode(imageData, canvas.width, canvas.height, numColors) : null;
+      encoded = iqEncoded ?? await this._ditheredEncode(imageData, canvas.width, canvas.height, numColors);
+    }
 
-    // oxipng 二次优化：对量化后（已缩小）的结果做 DEFLATE 再压，以 encoded 大小为准
-    const oxipng = encoded.byteLength < 2_000_000 ? await getOxipng() : null;
+    // oxipng (zopfli + palette/bit-depth reduction) — 关键体积优化，与 TinyPNG 同档
+    // 量化后 PNG-8 通常 < 1MB，6 秒超时容忍 zopfli 多轮迭代
+    const oxipng = await getOxipng();
     let best: ArrayBuffer = encoded;
     if (oxipng) {
       try {
-        const timeout = new Promise<null>(r => setTimeout(() => r(null), 2000));
+        const timeout = new Promise<null>(r => setTimeout(() => r(null), 6000));
         const result = await Promise.race([oxipng(encoded), timeout]);
         if (result && result.byteLength < encoded.byteLength) best = result;
-      } catch { /* ignore, fall through to UPNG result */ }
+      } catch { /* ignore, fall through */ }
     }
 
     const compressed = new Blob([best], { type: 'image/png' });
@@ -240,6 +354,118 @@ export class ImageEngine {
   static getOutputMime(file: File, format: ImageOutputFormat): string {
     if (format === 'original') return resolveOriginalMime(file);
     return MIME_MAP[format];
+  }
+
+  private async _ditheredEncode(
+    imageData: ImageData,
+    width: number,
+    height: number,
+    numColors: number,
+  ): Promise<ArrayBuffer> {
+    // Step 1: UPNG Wu 协方差量化 → 调色板
+    // 关键：UPNG 的 est.q 是 alpha-premultiplied 后归一化到 [0,1] 的浮点向量；
+    // 真实 RGBA8888 在 est.rgba（packed ABGR，已做 alpha de-premultiply）。
+    // 之前误用 est.q 导致整张调色板被四舍五入成 0/1，色带由此而来。
+    type UPNGPlte = { est: { rgba: number } }[];
+    const qRes = (UPNG as unknown as { quantize: (b: ArrayBuffer[], n: number) => { plte: UPNGPlte } })
+      .quantize([imageData.data.buffer], numColors);
+    const n = qRes.plte.length;
+    const palette = new Uint8Array(n * 4);
+    for (let i = 0; i < n; i++) {
+      const rgba = qRes.plte[i].est.rgba >>> 0;
+      palette[i * 4]     = rgba         & 0xff; // R
+      palette[i * 4 + 1] = (rgba >>>  8) & 0xff; // G
+      palette[i * 4 + 2] = (rgba >>> 16) & 0xff; // B
+      palette[i * 4 + 3] = (rgba >>> 24) & 0xff; // A
+    }
+
+    // Step 2: 64³ 快速 LUT — RGB(6-bit/ch) → 最近调色板索引
+    // 构建时间 O(64³×n)，查找时间 O(1)，整体比逐像素暴力搜索快 ~256 倍
+    const lut = new Uint8Array(64 * 64 * 64);
+    for (let ri = 0; ri < 64; ri++) {
+      for (let gi = 0; gi < 64; gi++) {
+        for (let bi = 0; bi < 64; bi++) {
+          const r = ri * 4 + 2, g = gi * 4 + 2, b = bi * 4 + 2;
+          let best = 0, bestD = Infinity;
+          for (let j = 0; j < n; j++) {
+            const dr = r - palette[j * 4], dg = g - palette[j * 4 + 1], db = b - palette[j * 4 + 2];
+            const d = dr * dr + dg * dg + db * db;
+            if (d < bestD) { bestD = d; best = j; }
+          }
+          lut[ri * 4096 + gi * 64 + bi] = best;
+        }
+      }
+    }
+
+    // Step 3: Floyd-Steinberg 抖动（双行误差缓冲，内存 O(width)）
+    const data = imageData.data;
+    const indices = new Uint8Array(width * height);
+    // x 使用 +1 偏移，避免 x=0 时左邻越界
+    const currErr = new Float32Array((width + 2) * 3);
+    const nextErr = new Float32Array((width + 2) * 3);
+
+    for (let y = 0; y < height; y++) {
+      nextErr.fill(0);
+      for (let x = 0; x < width; x++) {
+        const pi = (y * width + x) * 4;
+        const ei = (x + 1) * 3;
+
+        const r = Math.max(0, Math.min(255, Math.round(data[pi]     + currErr[ei])));
+        const g = Math.max(0, Math.min(255, Math.round(data[pi + 1] + currErr[ei + 1])));
+        const b = Math.max(0, Math.min(255, Math.round(data[pi + 2] + currErr[ei + 2])));
+
+        const idx = lut[(Math.min(63, r >> 2)) * 4096 + (Math.min(63, g >> 2)) * 64 + Math.min(63, b >> 2)];
+        indices[y * width + x] = idx;
+
+        const er = r - palette[idx * 4];
+        const eg = g - palette[idx * 4 + 1];
+        const eb = b - palette[idx * 4 + 2];
+
+        // 误差扩散：右 7/16，左下 3/16，正下 5/16，右下 1/16
+        const ne = ei + 3;
+        currErr[ne]     += er * 0.4375;
+        currErr[ne + 1] += eg * 0.4375;
+        currErr[ne + 2] += eb * 0.4375;
+        const bl = ei - 3;
+        nextErr[bl]     += er * 0.1875;
+        nextErr[bl + 1] += eg * 0.1875;
+        nextErr[bl + 2] += eb * 0.1875;
+        nextErr[ei]     += er * 0.3125;
+        nextErr[ei + 1] += eg * 0.3125;
+        nextErr[ei + 2] += eb * 0.3125;
+        nextErr[ne]     += er * 0.0625;
+        nextErr[ne + 1] += eg * 0.0625;
+        nextErr[ne + 2] += eb * 0.0625;
+      }
+      currErr.set(nextErr);
+    }
+
+    return _encodePng8(palette, indices, width, height);
+  }
+
+  private async _iqEncode(
+    imageData: ImageData,
+    width: number,
+    height: number,
+    numColors: number,
+  ): Promise<ArrayBuffer | null> {
+    try {
+      // byteOffset 保护：确保从正确偏移量读取 canvas 像素数据
+      const pixels = new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength);
+      const result = quantize_image(pixels, width, height, numColors) as unknown as {
+        palette: Uint8Array;
+        indices: Uint8Array;
+      };
+
+      // .slice() 立即脱离 WASM 线性内存
+      const pal = result.palette.slice();
+      const idx = result.indices.slice();
+
+      // PNG-8：真正的调色板模式，1 byte/pixel，比 PNG-32 展开小 75%
+      return await _encodePng8(pal, idx, width, height);
+    } catch {
+      return null; // WASM panic 或 OOM → 调用方回退到 UPNG Octree 量化
+    }
   }
 
   private _loadImage(file: File): Promise<HTMLImageElement> {

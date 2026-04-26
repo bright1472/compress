@@ -58,7 +58,12 @@
       "Bash(npm search *)",
       "Bash(python3 -c \"import json,sys; pkgs=json.load\\(sys.stdin\\); [print\\(p['name'], p['version'], p['description'][:80]\\) for p in pkgs[:15]]\")",
       "Bash(python3 -c \"import json,sys; pkgs=json.load\\(sys.stdin\\); [print\\(p['name'], p['version'], '|', p.get\\('description',''\\)[:100]\\) for p in pkgs[:20]]\")",
-      "Bash(npm show *)"
+      "Bash(npm show *)",
+      "Read(//private/tmp/**)",
+      "Bash(npm pack *)",
+      "Bash(tar -tzf panda-ai-imagequant-0.2.0.tgz)",
+      "Bash(tar -xzf panda-ai-imagequant-0.2.0.tgz)",
+      "Bash(npm run *)"
     ]
   }
 }
