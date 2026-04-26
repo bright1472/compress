@@ -25,6 +25,7 @@ export class FfmpegEngine {
   private loaded = false;
   private loadPromise: Promise<void> | null = null;
   private progressHandler: ((e: { progress: number }) => void) | null = null;
+  private currentReject: ((err: Error) => void) | null = null;
   private _isMultiThreaded = false;
 
   constructor() {
@@ -77,7 +78,19 @@ export class FfmpegEngine {
     await this.ffmpeg.writeFile(inputName, await fetchFile(inputFile));
     const args = this.buildArgs(inputName, outputName, options);
 
-    await this.ffmpeg.exec(args);
+    try {
+      await new Promise<void>(async (resolve, reject) => {
+        this.currentReject = reject;
+        try {
+          await this.ffmpeg.exec(args);
+          resolve();
+        } catch (e) {
+          reject(e);
+        }
+      });
+    } finally {
+      this.currentReject = null;
+    }
     const data = await this.ffmpeg.readFile(outputName);
 
     await this.ffmpeg.deleteFile(inputName).catch(() => {});
@@ -104,6 +117,10 @@ export class FfmpegEngine {
   isReady(): boolean { return this.loaded; }
 
   terminate(): void {
+    if (this.currentReject) {
+      this.currentReject(new Error('AbortError: FFmpeg 任务已中止'));
+      this.currentReject = null;
+    }
     if (this.progressHandler) this.ffmpeg.off('progress', this.progressHandler);
     this.ffmpeg.terminate();
     this.loaded = false;

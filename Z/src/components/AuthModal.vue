@@ -4,6 +4,7 @@ import { login, register } from '../composables/useAuth';
 import { syncUsage } from '../composables/useUsageLimit';
 import { t } from '../locales/i18n';
 
+const props = defineProps<{ limitReached?: boolean }>();
 const emit = defineEmits<{ (e: 'close'): void }>();
 
 const tab = ref<'login' | 'register'>('login');
@@ -58,7 +59,7 @@ async function oneClickRegister() {
       return;
     }
   }
-  error.value = '注册失败，请稍后重试';
+  error.value = t.value('auth.registerRetry');
   oneClickLoading.value = false;
 }
 
@@ -112,14 +113,22 @@ function closeAfterCreds() {
             </svg>
           </div>
           <div class="am-header-text">
-            <span class="am-title">泰坦压缩</span>
-            <span class="am-subtitle">本地处理 · 完全隐私</span>
+            <span class="am-title">{{ t('app.title') }}</span>
+            <span class="am-subtitle">{{ t('auth.modalSubtitle') }}</span>
           </div>
           <button class="am-close" @click="emit('close')">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none">
               <path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/>
             </svg>
           </button>
+        </div>
+
+        <!-- Limit reached banner -->
+        <div v-if="props.limitReached" class="am-limit-banner">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" style="flex-shrink:0">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/>
+          </svg>
+          <span>{{ t('auth.limitBanner') }}</span>
         </div>
 
         <!-- Tabs -->
@@ -141,25 +150,25 @@ function closeAfterCreds() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                 <path d="M20 6L9 17l-5-5" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
               </svg>
-              <span>注册成功！请保存账号信息</span>
+              <span>{{ t('auth.registerSuccess') }}</span>
             </div>
             <div class="am-cred-row">
-              <span class="am-cred-label">账号</span>
+              <span class="am-cred-label">{{ t('auth.accountLabel') }}</span>
               <span class="am-cred-val">{{ generatedCreds.account }}</span>
-              <button class="am-cred-copy" @click="copyToClipboard(generatedCreds?.account ?? '')" title="复制">
+              <button class="am-cred-copy" @click="copyToClipboard(generatedCreds?.account ?? '')">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" stroke-width="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="2"/></svg>
               </button>
             </div>
             <div class="am-cred-row">
-              <span class="am-cred-label">密码</span>
+              <span class="am-cred-label">{{ t('auth.passwordLabel') }}</span>
               <span class="am-cred-val am-cred-pwd">{{ generatedCreds.password }}</span>
-              <button class="am-cred-copy" @click="copyToClipboard(generatedCreds?.password ?? '')" title="复制">
+              <button class="am-cred-copy" @click="copyToClipboard(generatedCreds?.password ?? '')">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="9" y="9" width="13" height="13" rx="2" stroke="currentColor" stroke-width="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" stroke="currentColor" stroke-width="2"/></svg>
               </button>
             </div>
-            <p class="am-creds-hint">此密码不会再次显示，请复制后妥善保存</p>
+            <p class="am-creds-hint">{{ t('auth.credsHint') }}</p>
             <button class="am-btn am-btn-primary am-btn-full" @click="closeAfterCreds">
-              已保存，开始使用
+              {{ t('auth.savedStart') }}
             </button>
           </div>
 
@@ -174,10 +183,10 @@ function closeAfterCreds() {
               <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none">
                 <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/>
               </svg>
-              <span>{{ oneClickLoading ? '注册中…' : '一键注册（自动生成账号）' }}</span>
+              <span>{{ oneClickLoading ? t('auth.registering') : t('auth.oneClick') }}</span>
             </button>
 
-            <div class="am-divider"><span>或手动填写</span></div>
+            <div class="am-divider"><span>{{ t('auth.orManual') }}</span></div>
           </template>
         </template>
 
@@ -292,6 +301,10 @@ function closeAfterCreds() {
 /* ── Spinner ─────────────────────────────────────────────────────── */
 .am-spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: am-spin 0.7s linear infinite; }
 @keyframes am-spin { to { transform: rotate(360deg) } }
+
+/* ── Limit Banner ────────────────────────────────────────────────── */
+.am-limit-banner { display: flex; align-items: center; gap: 8px; padding: 10px 16px; background: rgba(249,115,22,0.1); border-bottom: 1px solid rgba(249,115,22,0.25); color: var(--c-accent); font-size: 0.76rem; font-weight: 500; line-height: 1.4; }
+.am-limit-banner strong { font-weight: 700; }
 
 /* ── Generated Credentials Card ──────────────────────────────────── */
 .am-creds-card { margin: 16px 20px 20px; background: var(--c-bg-surface); border: 1px solid rgba(34,197,94,0.3); border-radius: 12px; padding: 16px; display: flex; flex-direction: column; gap: 10px; }

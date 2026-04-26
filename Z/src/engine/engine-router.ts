@@ -71,6 +71,8 @@ export class EngineRouter {
 
   private _tier: (1 | 2 | 3 | 4) | null = null;
   private _routePromise: Promise<RouteDecision> | null = null;
+  // 用户主动取消时设为 true，阻止 catch 块错误地降级引擎
+  private _terminated = false;
 
   constructor() {
     this.ffmpegEngine = new FfmpegEngine();
@@ -151,6 +153,11 @@ export class EngineRouter {
         );
         return resultFile as unknown as Blob;
       } catch (e: unknown) {
+        // 用户取消（terminate()）引发的异常不应触发降级，直接向上抛出
+        if (this._terminated) {
+          this._terminated = false;
+          throw e;
+        }
         const msg = e instanceof Error ? e.message : String(e);
         logger.warn('system', `WebCodecs crash: ${msg}. Falling back to FFmpeg WASM.`);
         const fallbackTier: 3 | 4 = detectSharedArrayBuffer() ? 3 : 4;
@@ -160,7 +167,6 @@ export class EngineRouter {
           tier: fallbackTier,
           reason: `硬件加速引擎失败，自动降级至 FFmpeg WASM（CPU ${fallbackTier === 3 ? '多线程' : '单线程'}）`,
         };
-        // Fix (HIGH): pin the promise to the fallback so concurrent calls don't re-probe WebCodecs.
         this._routePromise = Promise.resolve(fallback);
         onRouteDecision?.(fallback);
         // Fall through to FFmpeg below.
@@ -189,6 +195,7 @@ export class EngineRouter {
   getFfmpegEngine(): FfmpegEngine { return this.ffmpegEngine; }
 
   terminate(): void {
+    this._terminated = true;
     this.ffmpegEngine.terminate();
     this.webCodecsEngine.stop();
   }

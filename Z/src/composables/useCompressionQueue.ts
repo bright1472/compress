@@ -137,12 +137,16 @@ export function useCompressionQueue(opts: UseCompressionQueueOptions) {
           if (next.status === 'pending') break;
         }
         if (isCancellingItem.value) {
-          if (next.status !== 'done') {
-            next.status = 'pending';
-            next.progress = 0;
-            next.errorMsg = '';
-          }
+          // 无论 processItem 以何种状态结束（含取消时 worker 返回残缺 blob 被标为 done），
+          // 只要取消请求发出，就强制还原到初始待处理状态
+          if (next.compressedUrl) { URL.revokeObjectURL(next.compressedUrl); next.compressedUrl = ''; }
+          next.status = 'pending';
+          next.progress = 0;
+          next.compressedSize = 0;
+          next.errorMsg = '';
+          next.engineUsed = '';
           isCancellingItem.value = false;
+          break;
         } else if (next.status === 'done' && opts.onItemDone) {
           await opts.onItemDone(next).catch(() => {});
         }
@@ -151,9 +155,12 @@ export function useCompressionQueue(opts: UseCompressionQueueOptions) {
       if (isCancelling.value) {
         queue.value.forEach(i => {
           if (i.status !== 'done') {
+            if (i.compressedUrl) { URL.revokeObjectURL(i.compressedUrl); i.compressedUrl = ''; }
             i.status = 'pending';
             i.progress = 0;
+            i.compressedSize = 0;
             i.errorMsg = '';
+            i.engineUsed = '';
           }
         });
       }

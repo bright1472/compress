@@ -20,7 +20,8 @@ provide('engineRouter', router);
 // ── Auth / Usage modals ───────────────────────────────────────────
 const showAuthModal = ref(false);
 const showActivationModal = ref(false);
-provide('openAuthModal', () => { showAuthModal.value = true; });
+const authModalFromGate = ref(false);
+provide('openAuthModal', (fromGate = false) => { authModalFromGate.value = fromGate; showAuthModal.value = true; });
 provide('openActivationModal', () => { showActivationModal.value = true; });
 
 // ── Theme ────────────────────────────────────────────────────────
@@ -170,7 +171,7 @@ onUnmounted(() => {
         <div class="hdr-divider"></div>
 
         <!-- 未登录 -->
-        <button v-if="!isLoggedIn" class="hdr-auth-btn" @click="showAuthModal = true">
+        <button v-if="!isLoggedIn" class="hdr-auth-btn" @click="authModalFromGate = false; showAuthModal = true">
           {{ t('auth.login') }}
         </button>
 
@@ -209,7 +210,7 @@ onUnmounted(() => {
 
     <LoggerConsole :show="showLogger" @close="showLogger = false" />
 
-    <AuthModal v-if="showAuthModal" @close="showAuthModal = false" />
+    <AuthModal v-if="showAuthModal" :limit-reached="authModalFromGate" @close="showAuthModal = false; authModalFromGate = false" />
     <ActivationModal v-if="showActivationModal" @close="showActivationModal = false" />
 
   </div>

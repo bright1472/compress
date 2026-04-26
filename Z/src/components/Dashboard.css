@@ -96,9 +96,9 @@
 .queue-item:hover .qi-actions { opacity: 1; pointer-events: all; }
 .qi-btn { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; background: none; transition: all var(--dur-fast); }
 .qi-btn.dl { color: var(--c-text-muted); }
-.qi-btn.dl:hover { background: var(--c-accent-subtle); color: var(--c-accent); }
+.qi-btn.dl:hover { background: var(--c-accent); color: #fff; transform: scale(1.1); }
 .qi-btn.rm { color: var(--c-text-muted); }
-.qi-btn.rm:hover { background: var(--c-danger-subtle); color: var(--c-danger); }
+.qi-btn.rm:hover { background: var(--c-danger); color: #fff; transform: scale(1.1); }
 
 /* Queue empty */
 .queue-empty { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: var(--c-text-muted); font-size: 0.75rem; font-family: 'JetBrains Mono', monospace; }
@@ -304,7 +304,7 @@
 @keyframes sp-out { from { transform: scale(1); opacity: 1; } to { transform: scale(0.94); opacity: 0; } }
 
 /* ── CPU Mode Banner (informational, non-blocking) ──────────────── */
-.cpu-mode-banner { position: absolute; top: 0; left: 0; right: 0; z-index: 25; display: flex; align-items: center; gap: 8px; padding: 7px 14px; background: rgba(245,158,11,0.08); border-bottom: 1px solid rgba(245,158,11,0.2); color: #f59e0b; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; font-weight: 600; }
+.cpu-mode-banner { display: flex; align-items: center; justify-content: center; gap: 8px; padding: 6px 14px; background: rgba(245,158,11,0.08); border-bottom: 1px solid rgba(245,158,11,0.2); color: #f59e0b; font-size: 0.7rem; font-weight: 600; flex-shrink: 0; }
 .cpu-mode-banner svg { flex-shrink: 0; }
 
 /* ── Tier pill in queue header ──────────────────────────────────── */

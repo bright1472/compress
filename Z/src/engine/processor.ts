@@ -7,6 +7,7 @@ export class MediaEngine {
   private workerReady = false;
   private abortController: AbortController | null = null;
   private warmupPromise: Promise<void> | null = null;
+  private currentReject: ((err: Error) => void) | null = null;
 
   /**
    * 预热 Worker：预创建并等待握手完成，减少首次压缩启动延迟。
@@ -74,12 +75,13 @@ export class MediaEngine {
       }
 
       return new Promise((resolve, reject) => {
+        this.currentReject = reject;
         // 根据文件大小动态计算超时：按最低 0.5 MB/s 估算 + 5 分钟缓冲
         const estimatedMin = Math.max(file.size / (0.5 * 1024 * 1024) * 60 * 1000, 10 * 60 * 1000);
         const timeoutMs = Math.min(estimatedMin + 5 * 60 * 1000, 60 * 60 * 1000); // 最大 60 分钟
         console.log(`⏱️ [Processor] Timeout set to ${Math.round(timeoutMs / 1000)}s (file: ${(file.size / 1048576).toFixed(0)}MB)`);
         const timeout = setTimeout(() => {
-          reject(new Error('Worker 处理超时'));
+          this.currentReject?.(new Error('Worker 处理超时'));
           this.stop();
         }, timeoutMs);
 
@@ -92,6 +94,7 @@ export class MediaEngine {
               break;
             case 'DONE':
               clearTimeout(timeout);
+              this.currentReject = null;
               this.workerReady = true;
               console.log('🎉 [Processor] Complete');
               (outputHandle as any).getFile()
@@ -100,6 +103,7 @@ export class MediaEngine {
               break;
             case 'ERROR':
               clearTimeout(timeout);
+              this.currentReject = null;
               console.error('🔥 [Processor] Worker Error:', data);
               reject(new Error(data));
               break;
@@ -109,6 +113,7 @@ export class MediaEngine {
         this.worker!.onmessage = handler;
         this.worker!.onerror = (err: any) => {
           clearTimeout(timeout);
+          this.currentReject = null;
           const realError = err?.message || 'Worker 崩溃';
           console.error('🚨 [Processor] Worker Crash:', realError, err);
           reject(new Error(`Worker Crash: ${realError}`));
@@ -128,6 +133,10 @@ export class MediaEngine {
   }
 
   stop() {
+    if (this.currentReject) {
+      this.currentReject(new Error('AbortError: 压缩任务已取消'));
+      this.currentReject = null;
+    }
     if (!this.worker) return;
     try { this.worker.postMessage({ type: 'STOP' }); } catch {}
     const w = this.worker;

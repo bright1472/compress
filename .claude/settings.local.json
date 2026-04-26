@@ -53,7 +53,11 @@
       "Bash(grep -E \"^d|\\\\.json$|\\\\.ts$\")",
       "Bash(xargs cat *)",
       "Bash(/Users/jieone/hello/basic-backend/node_modules/.bin/tsc --noEmit --project /Users/jieone/hello/basic-backend/tsconfig.json)",
-      "Bash(node_modules/.bin/vite build *)"
+      "Bash(node_modules/.bin/vite build *)",
+      "Bash(npm info *)",
+      "Bash(npm search *)",
+      "Bash(python3 -c \"import json,sys; pkgs=json.load\\(sys.stdin\\); [print\\(p['name'], p['version'], p['description'][:80]\\) for p in pkgs[:15]]\")",
+      "Bash(python3 -c \"import json,sys; pkgs=json.load\\(sys.stdin\\); [print\\(p['name'], p['version'], '|', p.get\\('description',''\\)[:100]\\) for p in pkgs[:20]]\")"
     ]
   }
 }

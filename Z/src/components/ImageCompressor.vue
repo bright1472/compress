@@ -11,7 +11,7 @@ import {
 } from '../composables/useCompressionQueue';
 import { isLoggedIn } from '../composables/useAuth';
 import { canCompress, afterCompress } from '../composables/useUsageLimit';
-import { checkAndGate, limitToastVisible, limitToastMsg } from '../composables/useCompressGate';
+import { checkAndGate } from '../composables/useCompressGate';
 import { fetchGlobalStats, reportStats, globalSavedBytes, globalTotalFiles, formatBytes } from '../composables/useGlobalStats';
 import { isOutputDirSupported, autoSaveEnabled, dirName, pickDir, clearDir, autoSave } from '../composables/useOutputDir';
 
@@ -259,12 +259,6 @@ defineExpose({
         </div>
 
         <div class="sb-footer">
-          <Transition name="limit-toast">
-            <div v-if="limitToastVisible" class="limit-toast-tip">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/><line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>
-              {{ limitToastMsg }}
-            </div>
-          </Transition>
           <button class="add-files-btn" @click="fileInputRef?.click()" :disabled="q.isRunning.value">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             {{ t('image.addFiles') }}

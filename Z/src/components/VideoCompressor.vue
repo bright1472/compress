@@ -11,7 +11,7 @@ import {
 } from '../composables/useCompressionQueue';
 import { isLoggedIn } from '../composables/useAuth';
 import { canCompress, afterCompress } from '../composables/useUsageLimit';
-import { checkAndGate, limitToastVisible, limitToastMsg } from '../composables/useCompressGate';
+import { checkAndGate } from '../composables/useCompressGate';
 import { fetchGlobalStats, reportStats, globalSavedBytes, globalTotalFiles, formatBytes } from '../composables/useGlobalStats';
 import { isOutputDirSupported, autoSaveEnabled, dirName, pickDir, clearDir, autoSave } from '../composables/useOutputDir';
 
@@ -25,6 +25,11 @@ const openActivationModal = inject<() => void>('openActivationModal', () => {});
 const handleStart = () => {
   if (!checkAndGate(openAuthModal, openActivationModal)) return;
   q.processQueue();
+};
+
+const handleCancelItem = () => {
+  if (!window.confirm(t.value('queue.cancelConfirm'))) return;
+  q.cancelCurrentItem();
 };
 
 // ── 文件验证 ─────────────────────────────────────────────────────
@@ -76,18 +81,23 @@ const currentTier = ref<1 | 2 | 3 | 4 | null>(null);
 
 const tierLabel = computed(() => {
   switch (currentTier.value) {
-    case 1: return { text: 'GPU HW', color: '#22c55e' };
-    case 2: return { text: 'GPU SW', color: '#f97316' };
-    case 3: return { text: 'CPU MT', color: '#f59e0b' };
-    case 4: return { text: 'CPU ST', color: '#ef4444' };
+    case 1: return { text: 'GPU 硬件加速', color: '#22c55e' };
+    case 2: return { text: 'GPU 软件渲染', color: '#f97316' };
+    case 3: return { text: 'CPU 多线程', color: '#f59e0b' };
+    case 4: return { text: 'CPU 单线程', color: '#ef4444' };
     default: return null;
   }
 });
 
 // true only for tiers 3 & 4 (pure CPU, no WebCodecs)
-const isCpuMode = computed(() => currentTier.value !== null && currentTier.value >= 3);
+// 仅在运行中才显示 CPU 模式提示，取消/完成后自动隐藏
+const isCpuMode = computed(() => q.isRunning.value && currentTier.value !== null && currentTier.value >= 3);
+
+// terminate() 触发后的取消标志，processItem 用它判断是否丢弃残缺输出
+const stopRequested = ref(false);
 
 const processItem = async (item: QueueItem) => {
+  stopRequested.value = false;
   if (!checkAndGate(openAuthModal, openActivationModal)) {
     throw new Error('QUOTA_EXCEEDED');
   }
@@ -114,6 +124,16 @@ const processItem = async (item: QueueItem) => {
       },
       'video',
     );
+
+    // 取消期间 worker 可能返回残缺 blob，丢弃它、还原状态交给队列重置
+    if (stopRequested.value) {
+      stopRequested.value = false;
+      item.status = 'error';
+      item.progress = 0;
+      item.errorMsg = '';
+      return;
+    }
+
     item.compressedSize = resultBlob.size;
     if (item.compressedUrl) URL.revokeObjectURL(item.compressedUrl);
     item.compressedUrl = URL.createObjectURL(resultBlob);
@@ -129,6 +149,13 @@ const processItem = async (item: QueueItem) => {
     const avgSpeed = (item.file.size / 1048576 / item.elapsed).toFixed(2);
     logger.info('system', `[video][Benchmark] ${item.file.name} | ${originalMB}MB -> ${compressedMB}MB | ${item.elapsed.toFixed(1)}s | ${avgSpeed} MB/s | Ratio: ${ratio}% | Engine: ${item.engineUsed}`);
   } catch (e: unknown) {
+    if (stopRequested.value) {
+      stopRequested.value = false;
+      item.status = 'error';
+      item.progress = 0;
+      item.errorMsg = '';
+      return;
+    }
     item.status = 'error';
     item.errorMsg = e instanceof Error ? e.message : t.value('process.encodingFailed');
   } finally {
@@ -154,7 +181,7 @@ const q = useCompressionQueue({
   isValidFile,
   processItem,
   buildDownloadName,
-  onStop: () => { router.terminate(); },
+  onStop: () => { stopRequested.value = true; router.terminate(); },
   onItemDone,
 });
 
@@ -200,6 +227,14 @@ defineExpose({
     </Transition>
 
     <input type="file" accept="video/*" multiple hidden ref="fileInputRef" @change="onFileInput" />
+
+    <!-- CPU 模式提示：显示在顶部全宽 -->
+    <Transition name="toast">
+      <div v-if="isCpuMode" class="cpu-mode-banner">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M9 9h6v6H9z" fill="currentColor" opacity=".4"/><path d="M2 9h2M2 15h2M20 9h2M20 15h2M9 2v2M15 2v2M9 20v2M15 20v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+        <span>{{ t('process.cpuModeHint') }}</span>
+      </div>
+    </Transition>
 
     <div class="app-body" :class="q.totalCount.value > 0 ? `mob-${mobileTab}` : ''">
       <!-- Sidebar -->
@@ -270,7 +305,7 @@ defineExpose({
                 <button v-if="item.status === 'done'" class="qi-btn dl" @click.stop="q.downloadItem(item)" :title="t('queue.download')">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
-                <button v-if="item.status === 'processing' && !q.isCancellingItem.value" class="qi-btn cancel" @click.stop="q.cancelCurrentItem()" :title="t('queue.cancelItem')">
+                <button v-if="item.status === 'processing' && !q.isCancellingItem.value" class="qi-btn cancel" @click.stop="handleCancelItem()" :title="t('queue.cancelItem')">
                   <svg width="8" height="8" viewBox="0 0 24 24" fill="none"><path d="M18 6L6 18M6 6l12 12" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
                 <button v-if="item.status !== 'processing'" class="qi-btn rm" @click.stop="q.removeItem(item.id)" :title="t('queue.remove')">
@@ -282,24 +317,13 @@ defineExpose({
         </div>
 
         <div class="sb-footer">
-          <Transition name="limit-toast">
-            <div v-if="limitToastVisible" class="limit-toast-tip">
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" style="flex-shrink:0"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.8"/><line x1="12" y1="8" x2="12" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><circle cx="12" cy="16" r="1" fill="currentColor"/></svg>
-              {{ limitToastMsg }}
-            </div>
-          </Transition>
-          <button class="add-files-btn" @click="fileInputRef?.click()" :disabled="q.isRunning.value">
+          <button class="add-files-btn" @click="fileInputRef?.click()">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             {{ t('queue.addFiles') }}
           </button>
           <button v-if="q.canStart.value" class="btn-primary" @click="handleStart">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>
             {{ t('process.start') }}{{ q.pendingCount.value > 1 ? ` (${q.pendingCount.value})` : '' }}
-          </button>
-          <button v-if="q.isRunning.value" class="btn-cancel" @click="q.cancelQueue()" :disabled="q.isCancelling.value">
-            <svg v-if="!q.isCancelling.value" width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></svg>
-            <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" class="spin-svg"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" stroke-dasharray="28 56" stroke-linecap="round"/></svg>
-            {{ q.isCancelling.value ? t('queue.cancelling') : t('queue.cancel') }}
           </button>
           <div v-if="q.doneCount.value > 0 && !q.isRunning.value" class="footer-done-actions">
             <button class="btn-dl-all" @click="q.downloadAll">
@@ -313,13 +337,6 @@ defineExpose({
 
       <!-- Main stage -->
       <main class="stage" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
-        <!-- CPU 模式柔性提示：仅在路由确定为 CPU 后出现，不阻止使用 -->
-        <Transition name="toast">
-          <div v-if="isCpuMode" class="cpu-mode-banner">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M9 9h6v6H9z" fill="currentColor" opacity=".4"/><path d="M2 9h2M2 15h2M20 9h2M20 15h2M9 2v2M15 2v2M9 20v2M15 20v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-            <span>{{ t('process.cpuModeHint') }}</span>
-          </div>
-        </Transition>
         <div v-if="q.totalCount.value === 0" class="drop-zone" :class="{ dragging: isDragging }" @click="fileInputRef?.click()">
           <div class="drop-content">
             <div class="drop-icon-wrap">
