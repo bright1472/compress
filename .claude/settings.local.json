@@ -57,7 +57,8 @@
       "Bash(npm info *)",
       "Bash(npm search *)",
       "Bash(python3 -c \"import json,sys; pkgs=json.load\\(sys.stdin\\); [print\\(p['name'], p['version'], p['description'][:80]\\) for p in pkgs[:15]]\")",
-      "Bash(python3 -c \"import json,sys; pkgs=json.load\\(sys.stdin\\); [print\\(p['name'], p['version'], '|', p.get\\('description',''\\)[:100]\\) for p in pkgs[:20]]\")"
+      "Bash(python3 -c \"import json,sys; pkgs=json.load\\(sys.stdin\\); [print\\(p['name'], p['version'], '|', p.get\\('description',''\\)[:100]\\) for p in pkgs[:20]]\")",
+      "Bash(npm show *)"
     ]
   }
 }

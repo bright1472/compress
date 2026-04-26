@@ -152,9 +152,10 @@ export class ImageEngine {
 
     const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
 
-    // quality >= 85 → numColors=0（无损，UPNG deflate 比 canvas.toBlob 更优）
-    // quality < 85  → 调色板量化（quality=0 → 4 色，quality=84 → ~215 色）
-    const numColors = quality >= 85 ? 0 : Math.max(4, Math.round((quality / 100) * 256));
+    // quality=100 → numColors=0（真正无损，纯 DEFLATE 优化）
+    // quality<100 → 调色板量化（quality=85 → ~217 色，4MB 真彩照片可压到 ~1MB）
+    // 与 TinyPNG 同路径：即使高质量也做量化，差异肉眼不可见
+    const numColors = quality >= 100 ? 0 : Math.max(4, Math.round((quality / 100) * 256));
 
     const encoded = UPNG.encode(
       [imageData.data.buffer],
@@ -163,8 +164,8 @@ export class ImageEngine {
       numColors,
     );
 
-    // oxipng 二次优化：仅对小文件运行，大文件收益有限但耗时明显（8MB+ 会增加 2-3s）
-    const oxipng = file.size < 2_000_000 ? await getOxipng() : null;
+    // oxipng 二次优化：对量化后（已缩小）的结果做 DEFLATE 再压，以 encoded 大小为准
+    const oxipng = encoded.byteLength < 2_000_000 ? await getOxipng() : null;
     let best: ArrayBuffer = encoded;
     if (oxipng) {
       try {
