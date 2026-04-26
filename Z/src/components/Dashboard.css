@@ -438,9 +438,22 @@
 
 /* ── View Modes ─────────────────────────────────────────────────── */
 @media (min-width: 769px) {
-  .app-body.view-list.has-files { justify-content: center; background: var(--c-bg-base); display: flex; }
-  .app-body.view-list.has-files .sidebar { width: 680px; border-left: 1px solid var(--c-border); border-radius: var(--r-xl); margin: 32px auto; box-shadow: 0 16px 40px rgba(0,0,0,0.06), 0 0 1px rgba(0,0,0,0.1); height: calc(100% - 64px); transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .app-body.view-list.has-files { justify-content: center; background: var(--c-bg-base) radial-gradient(circle at 50% -20%, rgba(249,115,22,0.12) 0%, transparent 70%); display: flex; align-items: center; position: relative; }
+  .app-body.view-list.has-files::before { content: ''; position: absolute; inset: 0; background-image: radial-gradient(circle, rgba(255,255,255,0.035) 1px, transparent 1px); background-size: 24px 24px; pointer-events: none; z-index: 0; mask-image: linear-gradient(to bottom, black 20%, transparent 100%); -webkit-mask-image: linear-gradient(to bottom, black 20%, transparent 100%); }
+  
+  .app-body.view-list.has-files .sidebar { position: relative; z-index: 10; width: 800px; max-width: 92vw; border: 1px solid rgba(255,255,255,0.06); border-radius: 16px; background: rgba(18,18,18,0.65); backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px); box-shadow: 0 40px 100px rgba(0,0,0,0.3), 0 10px 30px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.04); height: calc(100% - 80px); max-height: 860px; transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); margin: 0; }
   .app-body.view-list.has-files .stage { display: none; }
+  
+  /* Remove Box-in-Box for Queue Items */
+  .app-body.view-list.has-files .queue-list { padding: 0 8px; gap: 0; }
+  .app-body.view-list.has-files .queue-item { border: none; border-bottom: 1px solid rgba(255,255,255,0.03); border-radius: 8px; background: transparent; padding: 14px 16px; transition: background 0.2s; margin-bottom: 2px; }
+  .app-body.view-list.has-files .queue-item:hover { background: rgba(255,255,255,0.03); border-color: transparent; }
+  .app-body.view-list.has-files .queue-item.active { background: rgba(249,115,22,0.09); border-color: transparent; }
+  
+  /* Footer Buttons Flattening */
+  .app-body.view-list.has-files .sb-footer { border-top: 1px solid rgba(255,255,255,0.04); padding: 20px; background: rgba(0,0,0,0.15); border-radius: 0 0 16px 16px; }
+  .app-body.view-list.has-files .add-files-btn { border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); }
+  .app-body.view-list.has-files .add-files-btn:hover { background: rgba(255,255,255,0.06); border-color: rgba(255,255,255,0.12); }
 }
 .view-toggle-btn { width: 26px; height: 26px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--c-text-muted); cursor: pointer; transition: all 0.2s; border: 1px solid transparent; }
 .view-toggle-btn:hover { background: var(--c-bg-elevated); color: var(--c-text-primary); border-color: var(--c-border); }
