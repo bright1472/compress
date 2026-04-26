@@ -435,3 +435,12 @@
 .output-dir-pick-btn:hover { border-color: var(--c-accent); color: var(--c-accent); background: var(--c-accent-subtle); }
 
 /* Modal/Auth/Activation styles are global — see src/style.css */
+
+/* ── View Modes ─────────────────────────────────────────────────── */
+@media (min-width: 769px) {
+  .app-body.view-list.has-files { justify-content: center; background: var(--c-bg-base); display: flex; }
+  .app-body.view-list.has-files .sidebar { width: 680px; border-left: 1px solid var(--c-border); border-radius: var(--r-xl); margin: 32px auto; box-shadow: 0 16px 40px rgba(0,0,0,0.06), 0 0 1px rgba(0,0,0,0.1); height: calc(100% - 64px); transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1); }
+  .app-body.view-list.has-files .stage { display: none; }
+}
+.view-toggle-btn { width: 26px; height: 26px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; background: transparent; color: var(--c-text-muted); cursor: pointer; transition: all 0.2s; border: 1px solid transparent; }
+.view-toggle-btn:hover { background: var(--c-bg-elevated); color: var(--c-text-primary); border-color: var(--c-border); }
