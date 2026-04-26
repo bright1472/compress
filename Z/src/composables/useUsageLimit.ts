@@ -10,7 +10,12 @@ export const usageCount = ref<number>(_saved?.usageCount ?? 0);
 export const isSubscribed = ref<boolean>(_saved?.isSubscribed ?? false);
 export const usageLimit = 5;
 
-export const canCompress = computed(() => isSubscribed.value || usageCount.value < usageLimit);
+// 开发环境（vite dev / build --mode development）无限次数，便于调试
+const _devUnlimited = import.meta.env.DEV;
+
+export const canCompress = computed(
+  () => _devUnlimited || isSubscribed.value || usageCount.value < usageLimit,
+);
 
 function saveLocal() {
   localStorage.setItem(USAGE_KEY, JSON.stringify({ usageCount: usageCount.value, isSubscribed: isSubscribed.value }));
@@ -29,6 +34,7 @@ export async function syncUsage() {
 }
 
 export async function afterCompress() {
+  if (_devUnlimited) return; // 开发环境不累计用量
   if (isSubscribed.value) return;
 
   if (!isLoggedIn.value) {
