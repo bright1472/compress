@@ -20,12 +20,15 @@ export interface UseCompressionQueueOptions {
   processItem: (item: QueueItem) => Promise<void>;
   buildDownloadName: (item: QueueItem) => string;
   onStop?: () => void;
+  onItemDone?: (item: QueueItem) => Promise<void>;
 }
 
 export function useCompressionQueue(opts: UseCompressionQueueOptions) {
   const queue = ref<QueueItem[]>([]);
   const activeItemId = ref<string | null>(null);
   const isRunning = ref(false);
+  const isCancelling = ref(false);
+  const isCancellingItem = ref(false);
   const rejectedFiles = ref<string[]>([]);
   const dragSrcId = ref<string | null>(null);
   const dragOverId = ref<string | null>(null);
@@ -106,16 +109,57 @@ export function useCompressionQueue(opts: UseCompressionQueueOptions) {
   };
   const onQueueDragEnd = () => { dragSrcId.value = null; dragOverId.value = null; };
 
+  const cancelQueue = () => {
+    if (!isRunning.value) return;
+    isCancelling.value = true;
+    opts.onStop?.();
+  };
+
+  const cancelCurrentItem = () => {
+    if (!isRunning.value) return;
+    isCancellingItem.value = true;
+    opts.onStop?.();
+  };
+
   const processQueue = async () => {
     isRunning.value = true;
+    isCancelling.value = false;
+    isCancellingItem.value = false;
     try {
       while (true) {
+        if (isCancelling.value) break;
         const next = queue.value.find(i => i.status === 'pending');
         if (!next) break;
-        await opts.processItem(next);
+        try {
+          await opts.processItem(next);
+        } catch {
+          // processItem threw before updating item status (e.g. QUOTA_EXCEEDED) — stop queue
+          if (next.status === 'pending') break;
+        }
+        if (isCancellingItem.value) {
+          if (next.status !== 'done') {
+            next.status = 'pending';
+            next.progress = 0;
+            next.errorMsg = '';
+          }
+          isCancellingItem.value = false;
+        } else if (next.status === 'done' && opts.onItemDone) {
+          await opts.onItemDone(next).catch(() => {});
+        }
       }
     } finally {
+      if (isCancelling.value) {
+        queue.value.forEach(i => {
+          if (i.status !== 'done') {
+            i.status = 'pending';
+            i.progress = 0;
+            i.errorMsg = '';
+          }
+        });
+      }
       isRunning.value = false;
+      isCancelling.value = false;
+      isCancellingItem.value = false;
     }
   };
 
@@ -130,12 +174,12 @@ export function useCompressionQueue(opts: UseCompressionQueueOptions) {
   const downloadAll = () => queue.value.filter(i => i.status === 'done').forEach(downloadItem);
 
   return {
-    queue, activeItemId, isRunning, rejectedFiles,
+    queue, activeItemId, isRunning, isCancelling, isCancellingItem, rejectedFiles,
     dragSrcId, dragOverId,
     pendingCount, doneCount, totalCount, currentProcessing, canStart, activeItem, totalSavedMB,
     addFiles, removeItem, clearAll,
     onQueueDragStart, onQueueDragOver, onQueueDragLeave, onQueueDrop, onQueueDragEnd,
-    processQueue, downloadItem, downloadAll,
+    processQueue, cancelQueue, cancelCurrentItem, downloadItem, downloadAll,
   };
 }
 

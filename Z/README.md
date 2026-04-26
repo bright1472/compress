@@ -1,12 +1,36 @@
-# Project Titan — 视频压缩引擎
+# Titan Compress — 本地隐私压缩工具
 
-> Vue 3 + WebAssembly + WebCodecs + Native Host GPU 加速 | 浏览器端视频压缩
+> Vue 3 + WebAssembly + WebCodecs + Native Host GPU 加速
+> 图片 & 视频双模式 · 100% 本地压缩 · 无上传 · 无服务器
 
 ---
 
-## 架构概览
+## 核心功能
 
-Titan 采用**三引擎路由 + 自动降级**策略：
+### 图片压缩
+- **原格式保持**：PNG 压 PNG、JPG 压 JPG，不强制转码
+- **支持格式**：PNG、JPG/JPEG、WebP、AVIF、BMP、TIFF、GIF
+- **质量调节**：0–100 可调，实时预览压缩率
+- **批量处理**：拖拽多张同时压缩，进度逐项显示
+
+### 视频压缩
+- **编码格式**：H.264 (AVC) / H.265 (HEVC) / AV1，可切换
+- **质量控制**：CRF 滑块（18–40），实时显示质量档位标签
+- **速度预设**：ultrafast / fast / medium / slow（条形可视化）
+- **取消压缩**：随时中断，已完成项保留，未完成项回滚至待处理
+- **批量队列**：拖拽排序，支持 10GB+ 超大文件
+
+### 通用功能
+- **账号系统**：登录 / 一键注册（自动生成账户名 + 密码）
+- **免费限额**：5 次免费压缩，激活码解锁无限次
+- **全局统计**：显示所有用户累计节省的存储空间
+- **深色 / 亮色主题**：持久化，支持跟随系统
+- **多语言**：中文 / English 实时切换
+- **内置日志**：LoggerConsole 面板查看引擎决策日志
+
+---
+
+## 引擎架构
 
 ```
 用户文件
@@ -14,94 +38,31 @@ Titan 采用**三引擎路由 + 自动降级**策略：
    ▼
 EngineRouter（engine-router.ts）
    │
-   ├─ Native Host 可用 ──► Native Host GPU 编码（10-50× 速度）
-   │                          Rust + FFmpeg + GPU 硬件加速
-   │                          Chrome Extension + Native Messaging
-   │
-   ├─ WebCodecs 可用 ──► WebCodecs Worker（mediabunny）
-   │                          浏览器原生 VideoEncoder + GPU
-   │                      失败? ──YES──► 降级到 FFmpeg WASM
-   │
-   └─ WebCodecs 不可用 ──► FFmpeg WASM 多线程（兼容性兜底）
+   ├─ Tier 1  WebCodecs + 硬件 GPU 编码器   → GPU HW（Chrome/Edge + 独显/集显）
+   ├─ Tier 2  WebCodecs + 软件 CPU 编码器   → GPU SW（Chrome/Edge，无可用 GPU）
+   ├─ Tier 3  FFmpeg WASM 多线程           → CPU MT（有 SharedArrayBuffer）
+   └─ Tier 4  FFmpeg WASM 单线程           → CPU ST（iOS Safari / 兜底）
+
+图片走独立 ImageEngine，与视频引擎完全解耦
 ```
 
-- **Native Host**（极速模式）：Chrome Extension + Rust 原生进程 + FFmpeg GPU 编码，绕过浏览器沙盒
-- **WebCodecs Worker**（主模式）：基于 [mediabunny v1.40.1](https://github.com/Vanilagy/mediabunny)，≤1080p 自动启用 GPU 硬件加速
-- **FFmpeg WASM**（降级模式）：浏览器内运行的 FFmpeg，多线程版本 `@ffmpeg/core-mt`
-
----
-
-## 核心功能
-
-### 压缩参数
-- **编码格式**：H.264 (AVC) / H.265 (HEVC) / AV1，可切换
-- **质量控制**：CRF 滑块（18–40），实时显示质量档位
-- **速度预设**：ultrafast / fast / medium / slow（条形可视化）
-- **智能码率**：`calculateSmartBitrate` 自动计算目标码率
-  - 原始码率 < 分辨率推荐值 → 使用 80% 原始码率
-  - 原始码率 ≥ 分辨率推荐值 → 限制到推荐上限（SD 1.5M / HD 4M / FHD 8M / 4K 30M）
-  - 防止膨胀：用户指定码率超过原始时自动回退到智能值
-- **设置持久化**：codec / CRF / preset 自动保存到 localStorage，刷新不丢失
-
-### 处理进度
-- 实时进度百分比 + MB/s 速率
-- **剩余时间**胶囊（前 2% 显示 `--`，之后实时估算）
-- **耗时**徽章（完成后显示总耗时）
-- Header 状态栏：文件名 · 速率 · 进度 · 剩余时间
-
-### UI 功能
-- 拖拽 / 点击上传，支持批量队列
-- 完成后内置对比滑块（ComparisonSlider）查看压缩前后画质
-- 深色 / 亮色主题切换（持久化）
-- 多语言（i18n）
-- 内置日志控制台（LoggerConsole）
+自动降级：Tier 1 失败 → Tier 2 → Tier 3/4，用户无感知。
 
 ---
 
 ## 极速模式（Native Host）
 
-### 什么是极速模式？
-
-Chrome Extension + Rust 原生进程 + FFmpeg GPU 硬件加速的视频压缩方案。
-绕过浏览器沙盒限制，直接调用系统 FFmpeg 和 GPU 编码器（NVENC / QSV / AMF），
-速度可达 WebCodecs 模式的 **10-50 倍**。
-
-### 插拔式设计
-
-- **自动检测**：Web UI 自动探测 Native Host 是否已安装
-- **可用**：显示 🚀 极速模式入口，点击打开扩展页
-- **不可用**：无缝降级到 WebCodecs / FFmpeg WASM，用户无感知
-
-### GPU 编码器优先级
-
-```
-NVIDIA NVENC > Intel Quick Sync (QSV) > AMD AMF > 软件编码 (libx264)
-```
-
-根据硬件自动选择，用户无需手动配置。
-
-### 安装指南
-
-详见 [NATIVE-GUIDE.md](NATIVE-GUIDE.md)
-
-**快速安装**：
-```powershell
-cd Z/native-host
-cargo build --release
-powershell -ExecutionPolicy Bypass -File install-titan-host.ps1
-```
-
-然后 `chrome://extensions` → 开发者模式 → 加载 `native-bridge/` 目录。
-
-### 关键指标
+Chrome Extension + Rust 原生进程 + FFmpeg GPU 硬件编码，绕过浏览器沙盒。
 
 | 指标 | WebCodecs (≤1080p) | WebCodecs (2K/4K) | Native Host (NVENC) |
 |------|--------------------|--------------------|---------------------|
-| 加速方式 | GPU 硬件加速 | CPU 软件编码 | GPU 硬件加速 |
+| 加速方式 | GPU 硬件 | CPU 软件 | GPU 硬件 |
 | 压缩速度 | ~1× 实时 | ~0.3× 实时 | ~10-50× 实时 |
-| 二进制大小 | 浏览器内置 | 浏览器内置 | 1.7MB (Rust) |
-| 依赖 | 无 | 无 | FFmpeg + GPU 驱动 |
-| 安装 | 无需安装 | 无需安装 | 需安装扩展 + Native Host |
+| 安装要求 | 无 | 无 | 扩展 + Native Host |
+
+**GPU 优先级**：NVIDIA NVENC > Intel Quick Sync > AMD AMF > 软件编码
+
+详见 [NATIVE-GUIDE.md](NATIVE-GUIDE.md)
 
 ---
 
@@ -110,25 +71,15 @@ powershell -ExecutionPolicy Bypass -File install-titan-host.ps1
 | 层 | 技术 |
 |----|------|
 | UI 框架 | Vue 3 + TypeScript + Vite |
-| 主引擎 | mediabunny v1.40.1（WebCodecs Conversion API） |
+| 图片引擎 | @jsquash/jpeg · @jsquash/webp · @jsquash/oxipng · UPNG.js |
+| 视频主引擎 | mediabunny v1.40.1（WebCodecs Conversion API） |
 | 极速模式 | Rust + FFmpeg + Chrome Native Messaging |
+
 | 硬件加速 | `hardwareAcceleration: 'no-preference'`（≤1080p 自动启用 GPU，2K/4K 自动降级 CPU） |
-| 降级引擎 | FFmpeg WASM 多线程（`@ffmpeg/core-mt`，`-threads 0` 自动多核） |
-| 封装格式 | MP4（mediabunny Mp4OutputFormat） |
-| 磁盘写入 | OPFS `FileSystemSyncAccessHandle`（同步写入，零拷贝） |
 
----
-
-## 部署要求
-
-WebCodecs Worker 使用 `SharedArrayBuffer`，服务器**必须**返回以下响应头：
-
-```http
-Cross-Origin-Opener-Policy: same-origin
-Cross-Origin-Embedder-Policy: require-corp
-```
-
-Native Host 模式不需要此要求（运行在浏览器外）。
+| 降级引擎 | FFmpeg WASM（@ffmpeg/core-mt，-threads 0 自动多核） |
+| 账号 & 权限 | basic-backend（NestJS + MongoDB + JWT） |
+| 通用统计 | basic-backend `/stats/:namespace` 通用计数接口 |
 
 ---
 
@@ -136,12 +87,23 @@ Native Host 模式不需要此要求（运行在浏览器外）。
 
 ```bash
 cd Z
-npm install
-npm run dev
+pnpm install
+pnpm dev
 ```
 
 ```bash
-npm run build
+pnpm build
+```
+
+---
+
+## 部署要求
+
+WebCodecs Worker 使用 `SharedArrayBuffer`，服务器必须返回：
+
+```http
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
 ```
 
 ---
@@ -150,14 +112,17 @@ npm run build
 
 | 文档 | 说明 |
 |------|------|
-| [ARCHITECTURE.md](ARCHITECTURE.md) | 完整技术架构文档（双引擎 + Native Host） |
-| [NATIVE-PLAN.md](NATIVE-PLAN.md) | 极速模式实现方案（已完成） |
-| [NATIVE-GUIDE.md](NATIVE-GUIDE.md) | 极速模式安装和使用指引 |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | 完整技术架构（双引擎 + Native Host） |
+| [ROADMAP.md](ROADMAP.md) | 产品路线图（商业化 + 功能迭代） |
+| [NATIVE-GUIDE.md](NATIVE-GUIDE.md) | 极速模式安装指引 |
+| [NATIVE-PLAN.md](NATIVE-PLAN.md) | 极速模式实现方案 |
 
 ---
 
-## 支持的格式
+## 支持格式
 
-输入：MP4、MOV、MKV、AVI、WebM、FLV、WMV、3GP、OGV、M4V、TS、MTS
+**图片输入**：PNG · JPG · JPEG · WebP · AVIF · BMP · TIFF · GIF
 
-输出：MP4
+**视频输入**：MP4 · MOV · MKV · AVI · WebM · FLV · WMV · 3GP · OGV · M4V · TS · MTS
+
+**视频输出**：MP4

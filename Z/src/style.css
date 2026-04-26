@@ -232,3 +232,54 @@ input, select { font-family: inherit; outline: none; }
   color: #22c55e;
   font-size: 0.88rem; font-weight: 600;
 }
+
+/* ── Activation compare card ────────────────────────────────────────── */
+.act-compare {
+  display: grid; grid-template-columns: 1fr 1fr;
+  gap: 8px; margin-bottom: 12px;
+}
+.act-plan {
+  border-radius: 10px;
+  padding: 12px 12px 10px;
+  display: flex; flex-direction: column; gap: 5px;
+}
+.act-plan-free {
+  background: var(--c-bg-surface);
+  border: 1px solid var(--c-border);
+}
+.act-plan-pro {
+  background: rgba(249,115,22,0.07);
+  border: 1.5px solid rgba(249,115,22,0.35);
+}
+.act-plan-name {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 0.72rem; font-weight: 700;
+  color: var(--c-text-secondary);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  margin-bottom: 3px;
+}
+.act-pro-badge {
+  font-size: 0.55rem; font-weight: 800;
+  background: var(--c-accent); color: #fff;
+  border-radius: 3px; padding: 1px 4px;
+  letter-spacing: 0.06em;
+}
+.act-feat {
+  display: flex; align-items: center; gap: 5px;
+  font-size: 0.72rem; color: var(--c-text-secondary);
+  line-height: 1.4;
+}
+.act-feat svg { flex-shrink: 0; color: var(--c-accent); }
+.act-feat-dim { color: var(--c-text-muted); opacity: 0.7; padding-left: 2px; }
+.act-feat-highlight { color: var(--c-accent); font-weight: 600; }
+.act-plan-price {
+  margin-top: 6px;
+  font-size: 0.8rem; font-weight: 800;
+  color: var(--c-accent);
+  letter-spacing: -0.01em;
+}
+.act-buy-hint {
+  font-size: 0.7rem; color: var(--c-text-muted);
+  text-align: center; margin: 0 0 14px;
+  line-height: 1.5;
+}

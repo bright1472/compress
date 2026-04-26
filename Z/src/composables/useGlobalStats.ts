@@ -10,9 +10,9 @@ export async function fetchGlobalStats() {
   if (fetched) return;
   fetched = true;
   try {
-    const res = await api.get<{ totalSavedBytes: number; totalFiles: number }>('/compress/stats');
-    globalSavedBytes.value = res.totalSavedBytes;
-    globalTotalFiles.value = res.totalFiles;
+    const res = await api.get<Record<string, number>>('/stats/compress');
+    globalSavedBytes.value = res.savedBytes ?? 0;
+    globalTotalFiles.value = res.files ?? 0;
   } catch {
     // 网络失败时静默，不影响主功能
   }
@@ -25,7 +25,11 @@ export async function reportStats(savedBytes: number, fileType: 'image' | 'video
   globalSavedBytes.value += bytes;
   globalTotalFiles.value += 1;
   try {
-    await api.post('/compress/stats/add', { savedBytes: bytes, fileType });
+    await Promise.all([
+      api.post('/stats/add', { namespace: 'compress', key: 'savedBytes', delta: bytes }),
+      api.post('/stats/add', { namespace: 'compress', key: 'files', delta: 1 }),
+      api.post('/stats/add', { namespace: 'compress', key: `${fileType}Files`, delta: 1 }),
+    ]);
   } catch {
     // 上报失败不影响体验，本地已更新
   }

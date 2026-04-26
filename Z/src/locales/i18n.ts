@@ -4,7 +4,7 @@ export const zh = {
   app: {
     title: '泰坦压缩',
     subtitle: 'NATIVE-GRADE MEDIA ENGINE',
-    slogan: '免上传下载 · 极致隐私 · GPU 加速',
+    slogan: '纯本地处理 · 支持 10GB 大文件 · 扩展极速模式',
     darkMode: '暗色',
     lightMode: '亮色',
   },
@@ -41,6 +41,15 @@ export const zh = {
     removeConfirm: '确定要停止并移除当前正在处理的任务吗？',
     dragToSort: '拖动排序',
     download: '下载',
+    cancel: '取消压缩',
+    cancelling: '正在取消...',
+    cancelItem: '取消此项',
+  },
+  outputDir: {
+    label: '自动保存目录',
+    pick: '选择输出目录',
+    clear: '清除',
+    hint: '选择后每项完成自动落盘，无需逐一点击下载',
   },
   mode: {
     video: '视频',
@@ -146,6 +155,16 @@ export const zh = {
     failed: '激活失败，请检查激活码',
     success: '激活成功！无限制压缩已解锁',
     limitReached: '免费次数已用完，请激活订阅',
+    freeLabel: '免费版',
+    proLabel: 'Pro',
+    freeFeat1: '5 次压缩/账号',
+    freeFeat2: '标准浏览器速度',
+    freeFeat3: '视频 + 图片',
+    proFeat1: '无限次压缩',
+    proFeat2: '扩展极速模式',
+    proFeat3: '视频 + 图片全格式',
+    proPrice: '¥59 一次买断',
+    buyHint: '淘宝搜索「泰坦压缩」购买激活码',
   },
 };
 
@@ -153,7 +172,7 @@ export const en = {
   app: {
     title: 'Titan Compress',
     subtitle: 'NATIVE-GRADE MEDIA ENGINE',
-    slogan: 'NO UPLOAD · TOTAL PRIVACY · GPU ACCELERATED',
+    slogan: '100% Local · 10GB+ Files · Native Extension Speed',
     darkMode: 'Dark',
     lightMode: 'Light',
   },
@@ -190,6 +209,15 @@ export const en = {
     removeConfirm: 'Stop and remove the current active task?',
     dragToSort: 'Drag to sort',
     download: 'Download',
+    cancel: 'Cancel',
+    cancelling: 'Cancelling...',
+    cancelItem: 'Cancel this item',
+  },
+  outputDir: {
+    label: 'AUTO-SAVE DIRECTORY',
+    pick: 'Choose Output Folder',
+    clear: 'Clear',
+    hint: 'Files are saved automatically after each item completes',
   },
   mode: {
     video: 'Video',
@@ -295,6 +323,16 @@ export const en = {
     failed: 'Activation failed, please check your code',
     success: 'Activated! Unlimited compression unlocked',
     limitReached: 'Free quota reached — activate to continue',
+    freeLabel: 'Free',
+    proLabel: 'Pro',
+    freeFeat1: '5 compressions/account',
+    freeFeat2: 'Standard browser speed',
+    freeFeat3: 'Video + Image',
+    proFeat1: 'Unlimited compressions',
+    proFeat2: 'Native Extension Speed',
+    proFeat3: 'All formats supported',
+    proPrice: '$9.99 one-time',
+    buyHint: 'Purchase activation code on Taobao — search "泰坦压缩"',
   },
 };
 

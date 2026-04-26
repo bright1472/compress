@@ -227,175 +227,44 @@ onUnmounted(() => { wheelCleanup?.(); });
 </template>
 
 <style scoped>
-.ic-root {
-  flex: 1;
-  position: relative;
-  overflow: hidden;
-  background: var(--c-bg-overlay, #0a0a0a);
-  user-select: none;
-  -webkit-user-select: none;
-}
+.ic-root { flex: 1; position: relative; overflow: hidden; background: var(--c-bg-overlay, #0a0a0a); user-select: none; -webkit-user-select: none; }
 
 /* Loading skeleton */
-.ic-skeleton {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 20;
-  background: var(--c-bg-overlay, #0a0a0a);
-}
-.ic-skeleton-spinner {
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.12);
-  border-top-color: rgba(255,255,255,0.6);
-  animation: ic-spin 0.7s linear infinite;
-}
+.ic-skeleton { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; z-index: 20; background: var(--c-bg-overlay, #0a0a0a); }
+.ic-skeleton-spinner { width: 28px; height: 28px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.12); border-top-color: rgba(255,255,255,0.6); animation: ic-spin 0.7s linear infinite; }
 @keyframes ic-spin { to { transform: rotate(360deg); } }
 
 /* Zoomable canvas */
-.ic-canvas {
-  position: absolute;
-  inset: 0;
-  will-change: transform;
-}
+.ic-canvas { position: absolute; inset: 0; will-change: transform; }
 .ic-hidden { visibility: hidden; }
 
-.ic-img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
-  display: block;
-  pointer-events: none;
-}
+.ic-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
 
 /* Divider */
-.ic-divider {
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  width: 40px;
-  transform: translateX(-50%);
-  cursor: ew-resize;
-  z-index: 10;
-  touch-action: none;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
+.ic-divider { position: absolute; top: 0; bottom: 0; width: 40px; transform: translateX(-50%); cursor: ew-resize; z-index: 10; touch-action: none; display: flex; align-items: center; justify-content: center; }
 
-.ic-divider::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 50%;
-  width: 2px;
-  transform: translateX(-50%);
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 0 6px rgba(0, 0, 0, 0.4);
-}
+.ic-divider::before { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%); background: rgba(255, 255, 255, 0.85); box-shadow: 0 0 6px rgba(0, 0, 0, 0.4); }
 
-.ic-handle {
-  width: 38px;
-  height: 38px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #333;
-  position: relative;
-  z-index: 1;
-  flex-shrink: 0;
-}
+.ic-handle { width: 38px; height: 38px; border-radius: 50%; background: #fff; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.35); display: flex; align-items: center; justify-content: center; color: #333; position: relative; z-index: 1; flex-shrink: 0; }
 
 /* Labels */
-.ic-label {
-  position: absolute;
-  top: 10px;
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.58rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  padding: 3px 9px;
-  border-radius: 3px;
-  pointer-events: none;
-  z-index: 8;
-  backdrop-filter: blur(6px);
-}
+.ic-label { position: absolute; top: 10px; font-family: 'JetBrains Mono', monospace; font-size: 0.58rem; font-weight: 700; letter-spacing: 0.08em; padding: 3px 9px; border-radius: 3px; pointer-events: none; z-index: 8; backdrop-filter: blur(6px); }
 
-.ic-label-orig {
-  left: 10px;
-  color: #f59e0b;
-  background: rgba(245, 158, 11, 0.18);
-  border: 1px solid rgba(245, 158, 11, 0.35);
-}
+.ic-label-orig { left: 10px; color: #f59e0b; background: rgba(245, 158, 11, 0.18); border: 1px solid rgba(245, 158, 11, 0.35); }
 
-.ic-label-comp {
-  right: 10px;
-  color: #22c55e;
-  background: rgba(34, 197, 94, 0.14);
-  border: 1px solid rgba(34, 197, 94, 0.3);
-}
+.ic-label-comp { right: 10px; color: #22c55e; background: rgba(34, 197, 94, 0.14); border: 1px solid rgba(34, 197, 94, 0.3); }
 
 /* Zoom overlay */
-.ic-zoom-overlay {
-  position: absolute;
-  bottom: 14px;
-  left: 50%;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  z-index: 15;
-}
+.ic-zoom-overlay { position: absolute; bottom: 14px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; z-index: 15; }
 
-.ic-zoom-badge {
-  font-family: 'JetBrains Mono', monospace;
-  font-size: 0.65rem;
-  font-weight: 600;
-  padding: 3px 10px;
-  border-radius: 4px;
-  background: rgba(0, 0, 0, 0.55);
-  color: #fff;
-  backdrop-filter: blur(6px);
-  border: 1px solid rgba(255,255,255,0.12);
-}
+.ic-zoom-badge { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; font-weight: 600; padding: 3px 10px; border-radius: 4px; background: rgba(0, 0, 0, 0.55); color: #fff; backdrop-filter: blur(6px); border: 1px solid rgba(255,255,255,0.12); }
 
-.ic-reset-btn {
-  font-size: 0.65rem;
-  padding: 3px 10px;
-  border-radius: 4px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(0, 0, 0, 0.5);
-  color: rgba(255, 255, 255, 0.85);
-  cursor: pointer;
-  backdrop-filter: blur(6px);
-  transition: background 0.15s;
-}
+.ic-reset-btn { font-size: 0.65rem; padding: 3px 10px; border-radius: 4px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(0, 0, 0, 0.5); color: rgba(255, 255, 255, 0.85); cursor: pointer; backdrop-filter: blur(6px); transition: background 0.15s; }
 
 .ic-reset-btn:hover { background: rgba(255, 255, 255, 0.15); }
 
 /* Hint */
-.ic-hint {
-  position: absolute;
-  bottom: 10px;
-  right: 12px;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  font-size: 0.58rem;
-  color: rgba(255, 255, 255, 0.3);
-  pointer-events: none;
-  z-index: 5;
-}
+.ic-hint { position: absolute; bottom: 10px; right: 12px; display: flex; align-items: center; gap: 5px; font-size: 0.58rem; color: rgba(255, 255, 255, 0.3); pointer-events: none; z-index: 5; }
 
 /* Fade transition */
 .ic-fade-enter-active,

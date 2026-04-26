@@ -53,6 +53,37 @@ async function submit() {
           </div>
         </div>
 
+        <!-- 免费 vs Pro 对比 -->
+        <div v-if="!success" class="act-compare">
+          <div class="act-plan act-plan-free">
+            <div class="act-plan-name">{{ t('activation.freeLabel') }}</div>
+            <div class="act-feat act-feat-dim">{{ t('activation.freeFeat1') }}</div>
+            <div class="act-feat act-feat-dim">{{ t('activation.freeFeat2') }}</div>
+            <div class="act-feat act-feat-dim">{{ t('activation.freeFeat3') }}</div>
+          </div>
+          <div class="act-plan act-plan-pro">
+            <div class="act-plan-name">
+              {{ t('activation.proLabel') }}
+              <span class="act-pro-badge">PRO</span>
+            </div>
+            <div class="act-feat">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              {{ t('activation.proFeat1') }}
+            </div>
+            <div class="act-feat act-feat-highlight">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/></svg>
+              {{ t('activation.proFeat2') }}
+            </div>
+            <div class="act-feat">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              {{ t('activation.proFeat3') }}
+            </div>
+            <div class="act-plan-price">{{ t('activation.proPrice') }}</div>
+          </div>
+        </div>
+
+        <p v-if="!success" class="act-buy-hint">{{ t('activation.buyHint') }}</p>
+
         <div v-if="success" class="activation-success">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
           <span>{{ t('activation.success') }}</span>

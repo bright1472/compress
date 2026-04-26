@@ -13,6 +13,7 @@ import { isLoggedIn } from '../composables/useAuth';
 import { canCompress, afterCompress } from '../composables/useUsageLimit';
 import { checkAndGate, limitToastVisible, limitToastMsg } from '../composables/useCompressGate';
 import { fetchGlobalStats, reportStats, globalSavedBytes, globalTotalFiles, formatBytes } from '../composables/useGlobalStats';
+import { isOutputDirSupported, autoSaveEnabled, dirName, pickDir, clearDir, autoSave } from '../composables/useOutputDir';
 
 type ImageFmt = 'original' | 'png' | 'jpg' | 'webp' | 'avif';
 
@@ -117,11 +118,24 @@ const buildDownloadName = (item: QueueItem) => {
   return `titan_${item.file.name}`;
 };
 
+const onItemDone = async (item: QueueItem) => {
+  if (!autoSaveEnabled.value) return;
+  try {
+    const blob = await fetch(item.compressedUrl).then(r => r.blob());
+    const ok = await autoSave(blob, buildDownloadName(item));
+    if (!ok) logger.warn('system', `[autoSave] Failed to write ${item.file.name} — check directory permission`);
+  } catch (e) {
+    logger.warn('system', `[autoSave] Error saving ${item.file.name}: ${e instanceof Error ? e.message : e}`);
+  }
+};
+
 const q = useCompressionQueue({
   fileType: 'image',
   isValidFile,
   processItem,
   buildDownloadName,
+  onStop: () => { router.terminate(); },
+  onItemDone,
 });
 
 // ── 拖放 ──────────────────────────────────────────────────────────
@@ -233,6 +247,9 @@ defineExpose({
                 <button v-if="item.status === 'done'" class="qi-btn dl" @click.stop="q.downloadItem(item)" :title="t('queue.download')">
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
                 </button>
+                <button v-if="item.status === 'processing' && !q.isCancellingItem.value" class="qi-btn cancel" @click.stop="q.cancelCurrentItem()" :title="t('queue.cancelItem')">
+                  <svg width="10" height="10" viewBox="0 0 24 24" fill="none"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></svg>
+                </button>
                 <button v-if="item.status !== 'processing'" class="qi-btn rm" @click.stop="q.removeItem(item.id)" :title="t('queue.remove')">
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
                 </button>
@@ -256,10 +273,11 @@ defineExpose({
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><polygon points="5 3 19 12 5 21 5 3" fill="currentColor"/></svg>
             {{ t('process.start') }}{{ q.pendingCount.value > 1 ? ` (${q.pendingCount.value})` : '' }}
           </button>
-          <div v-if="q.isRunning.value" class="running-info">
-            <div class="running-dot"></div>
-            <span>{{ t('queue.processing') }}</span>
-          </div>
+          <button v-if="q.isRunning.value" class="btn-cancel" @click="q.cancelQueue()" :disabled="q.isCancelling.value">
+            <svg v-if="!q.isCancelling.value" width="13" height="13" viewBox="0 0 24 24" fill="none"><rect x="5" y="5" width="14" height="14" rx="2" fill="currentColor"/></svg>
+            <svg v-else width="13" height="13" viewBox="0 0 24 24" fill="none" class="spin-svg"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" stroke-dasharray="28 56" stroke-linecap="round"/></svg>
+            {{ q.isCancelling.value ? t('queue.cancelling') : t('queue.cancel') }}
+          </button>
           <div v-if="q.doneCount.value > 0 && !q.isRunning.value" class="footer-done-actions">
             <button class="btn-dl-all" @click="q.downloadAll">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -367,6 +385,20 @@ defineExpose({
             <button class="sp-close" @click="closeSettings">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><line x1="18" y1="6" x2="6" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="6" y1="6" x2="18" y2="18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             </button>
+          </div>
+
+          <div v-if="isOutputDirSupported" class="sp-section">
+            <div class="sp-section-label">{{ t('outputDir.label') }}</div>
+            <div v-if="autoSaveEnabled" class="output-dir-active">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+              <span class="output-dir-name">{{ dirName }}</span>
+              <button class="output-dir-clear-btn" @click="clearDir">{{ t('outputDir.clear') }}</button>
+            </div>
+            <button v-else class="output-dir-pick-btn" @click="pickDir">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><line x1="12" y1="11" x2="12" y2="17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><line x1="9" y1="14" x2="15" y2="14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+              {{ t('outputDir.pick') }}
+            </button>
+            <p class="sp-hint">{{ t('outputDir.hint') }}</p>
           </div>
 
           <div class="sp-section">
