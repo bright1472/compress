@@ -1,70 +1,40 @@
-# CRITICAL PROTOCOL: qmd 检索规范（强制执行）
+# 项目 compress — qmd 检索补充规范
+
+> 通用规则见 `~/.claude/CLAUDE.md` 中的「代码检索 token 节省规范」。
+> 本文件只补充本项目的环境差异和 collection 配置，**不重复全局规则**。
+> 与全局规则冲突时，**立即中断询问用户**。
 
 ## 0. 环境说明
-- qmd-search：运行在家庭 Mac（远程 MCP 服务）
-- qmd skill：运行在办公 Windows（本地工具）
-- 代码检索只能使用以上两者
+- qmd skill：办公 Windows / 家庭 Mac 本地 CLI（首选）
+- qmd-search：远程 MCP 服务（兜底）
+- 仅这两者可用作代码检索
 
-## 1. 唯一允许的检索工具
-仅允许：
-- qmd-search（远程）
-- qmd skill（本地）
+## 1. 本项目 qmd collection
 
-严格禁止：
-- grep
-- find
-- ls -R
-- 任意形式的目录遍历 / 全量扫描
+```
+compress    （pattern: **/*.{ts,tsx,vue,js,jsx,rs,css,html,md}）
+slim-video  （仅 markdown 文档）
+```
 
-## 2. 检索前置步骤（必须执行）
-在每次进行代码搜索前，必须先判断是否需要更新索引：
+代码搜索默认带 `-c compress`；查文档/营销页才用 `-c slim-video`。
 
-执行逻辑：
-1) 判断代码是否可能已变更（新增 / 修改 / 拉取代码）
-2) 如果“可能变更” → 执行：
-   qmd embed
-3) 如果“确定无变更” → 可跳过
+## 2. 强制规则（与全局一致，再次强调）
 
-禁止在未评估索引状态时直接搜索
+- **禁止** `qmd query`（会触发 1.28GB 模型下载）
+- **禁止** `Read` 项目源码文件（`Z/src/**`、`native-host/src/**` 等），只看 qmd snippet
+- **禁止** `grep` / `find` / `ls -R` / `glob`
+- 单次 `qmd search` 命令必须 `2>&1 | head -40`
+- 看到进度条/模型下载立即 Ctrl-C
+- snippet 不足时用 `qmd get <path> -l <start>:<end>` 精确取行，**禁止整文件读**
+- 三轮检索仍无结果 → 停下，按全局规则输出提示语
 
-## 3. 工具选择策略
-优先级：
+## 3. 索引刷新
 
-1) 优先使用 qmd skill（本地更快）
-2) 若本地无结果 → 使用 qmd-search（远程）
+- 代码可能变更过（git pull / 新增文件 / 修改）→ 先 `qmd embed`
+- 确定无变更 → 跳过
+- 不在索引内的文件（如 `node_modules`、构建产物）禁止搜索/读取
 
-## 4. 搜索执行流程
-必须按顺序：
+## 4. 自动记忆
 
-1) qmd skill 搜索
-2) 无结果 → qmd-search 搜索
-3) 仍无结果 → 停止继续搜索
-
-禁止：
-- 自行扫描文件
-- 猜测代码结构
-- 用其他工具替代
-
-## 5. 失败处理（关键规则）
-如果 qmd skill + qmd-search 都未返回有效结果：
-
-必须直接输出提示：
-
-「未在索引中找到相关代码，请确认：
-1) 是否已执行 qmd embed
-2) 目标代码是否已被索引
-3) 是否需要提供更准确的关键词」
-
-禁止继续臆测或编造代码位置
-
-## 6. 读取策略
-- 只基于 qmd 返回的 snippets 理解上下文
-- 禁止整文件读取（>500 行）
-- 必须按需逐步扩大搜索范围
-
-## 7. 目标
-- 最小化扫描范围
-- 最大化检索精度
-- 避免无效 IO 和 token 消耗
-- 
-- 重大重构/架构变更完成后，自动记录到 claude-mem memory
+- 重大重构 / 架构变更完成后，自动记录到 claude-mem memory
+- 用户的关键反馈（如 token 节省规范）需写入 `~/.claude/projects/-Users-jieone-hello-compress/memory/`
