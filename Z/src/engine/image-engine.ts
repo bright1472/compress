@@ -17,6 +17,8 @@ import oxipngWasmUrl from '@jsquash/oxipng/codec/pkg/squoosh_oxipng_bg.wasm?url'
 import imagequantInit from '@panda-ai/imagequant';
 import { quantize_image } from '@panda-ai/imagequant';
 import imagequantWasmUrl from '@panda-ai/imagequant/imagequant_bg.wasm?url';
+import { readPreservedExif, injectExifToJpeg } from './exif-preserve';
+import type { PreservedExif } from './exif-preserve';
 
 export type ImageOutputFormat = 'original' | 'png' | 'jpg' | 'webp' | 'avif';
 
@@ -253,7 +255,9 @@ export class ImageEngine {
       return this._compressPng(img, file, options.quality);
     }
 
-    return this._compressLossy(img, file, targetMime, options.quality);
+    // 仅 JPEG 输出时读 EXIF（其他容器不注入，节省 IO；失败返回 null 不影响主流程）
+    const preserved = targetMime === 'image/jpeg' ? await readPreservedExif(file) : null;
+    return this._compressLossy(img, file, targetMime, options.quality, preserved);
   }
 
   private async _compressPng(img: HTMLImageElement, file: File, quality: number): Promise<Blob> {
@@ -302,6 +306,7 @@ export class ImageEngine {
     file: File,
     targetMime: string,
     quality: number,
+    preserved: PreservedExif | null = null,
   ): Promise<Blob> {
     const canvas = document.createElement('canvas');
     canvas.width  = img.naturalWidth;
@@ -338,7 +343,9 @@ export class ImageEngine {
           trellis_opt_table: true,
         };
         const buffer = await encode(imageData, opts);
-        const compressed = new Blob([buffer], { type: 'image/jpeg' });
+        // 注入保留的 EXIF（DateTimeOriginal/GPS/Make/Model/Orientation=1）
+        const finalBuffer = preserved ? injectExifToJpeg(buffer, preserved) : buffer;
+        const compressed = new Blob([finalBuffer], { type: 'image/jpeg' });
         if (compressed.size < file.size) return compressed;
         return file;
       }
@@ -363,6 +370,14 @@ export class ImageEngine {
 
     // 回退：canvas.toBlob（AVIF 或 WASM 初始化失败时）
     const compressed = await this._canvasToBlob(canvas, targetMime, quality / 100);
+    // JPEG 回退路径同样需要注入 EXIF
+    if (preserved && targetMime === 'image/jpeg') {
+      const buf = await compressed.arrayBuffer();
+      const injected = injectExifToJpeg(buf, preserved);
+      const finalBlob = new Blob([injected], { type: 'image/jpeg' });
+      if (finalBlob.size < file.size) return finalBlob;
+      return file;
+    }
     if (compressed.size < file.size) return compressed;
     return file;
   }

@@ -11,6 +11,36 @@ export interface CompressionOptions {
 
 export type ProgressCallback = (progress: number) => void;
 
+/**
+ * 构造 FFmpeg 命令行参数（纯函数，无副作用，可单测）
+ *
+ * 关键 flag：
+ *   -map_metadata 0                       → 复制源文件全局 metadata
+ *   -movflags use_metadata_tags+faststart → mp4 容器保留 QuickTime 私有 atom（iPhone）
+ */
+export function buildFfmpegArgs(
+  input: string,
+  output: string,
+  opt: CompressionOptions,
+  isMultiThreaded: boolean,
+): string[] {
+  const base = ['-hide_banner', '-loglevel', 'error'];
+  const threadFlag = isMultiThreaded ? ['-threads', '0'] : ['-threads', '1'];
+  const meta = ['-map_metadata', '0'];
+  const mp4Flags = opt.outputFormat === 'mp4'
+    ? ['-movflags', 'use_metadata_tags+faststart']
+    : [];
+
+  if (opt.codec === 'libx264') {
+    return [...base, '-i', input, ...meta, '-c:v', 'libx264', '-crf', String(opt.crf), '-preset', opt.preset, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', ...mp4Flags, ...threadFlag, '-y', output];
+  }
+  if (opt.codec === 'libx265') {
+    return [...base, '-i', input, ...meta, '-c:v', 'libx265', '-crf', String(opt.crf), '-preset', opt.preset, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-tag:v', 'hvc1', ...mp4Flags, ...threadFlag, '-y', output];
+  }
+  // AV1 — cpu-used=8 for speed
+  return [...base, '-i', input, ...meta, '-c:v', 'libaom-av1', '-cpu-used', '8', '-crf', String(opt.crf), '-b:v', '0', '-pix_fmt', 'yuv420p', '-c:a', 'libopus', ...mp4Flags, ...threadFlag, '-y', output];
+}
+
 // Multi-thread requires SharedArrayBuffer (crossOriginIsolated).
 // Single-thread works in every browser including iOS Safari.
 const isMultiThreaded = (): boolean => {
@@ -100,18 +130,7 @@ export class FfmpegEngine {
   }
 
   private buildArgs(input: string, output: string, opt: CompressionOptions): string[] {
-    const base = ['-hide_banner', '-loglevel', 'error'];
-    // Single-threaded: set threads=1 explicitly so FFmpeg doesn't try to spawn workers.
-    const threadFlag = this._isMultiThreaded ? ['-threads', '0'] : ['-threads', '1'];
-
-    if (opt.codec === 'libx264') {
-      return [...base, '-i', input, '-c:v', 'libx264', '-crf', String(opt.crf), '-preset', opt.preset, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-movflags', '+faststart', ...threadFlag, '-y', output];
-    }
-    if (opt.codec === 'libx265') {
-      return [...base, '-i', input, '-c:v', 'libx265', '-crf', String(opt.crf), '-preset', opt.preset, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-tag:v', 'hvc1', ...threadFlag, '-y', output];
-    }
-    // AV1 — cpu-used=8 for speed, single-thread explicit
-    return [...base, '-i', input, '-c:v', 'libaom-av1', '-cpu-used', '8', '-crf', String(opt.crf), '-b:v', '0', '-pix_fmt', 'yuv420p', '-c:a', 'libopus', ...threadFlag, '-y', output];
+    return buildFfmpegArgs(input, output, opt, this._isMultiThreaded);
   }
 
   isReady(): boolean { return this.loaded; }
