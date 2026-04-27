@@ -5,7 +5,6 @@ import { storage } from './storage-service';
 export class MediaEngine {
   private worker: Worker | null = null;
   private workerReady = false;
-  private abortController: AbortController | null = null;
   private warmupPromise: Promise<void> | null = null;
   private currentReject: ((err: Error) => void) | null = null;
 
@@ -20,7 +19,6 @@ export class MediaEngine {
     this.warmupPromise = (async () => {
       await storage.init();
       this.worker = new MediaWorker();
-      this.abortController = new AbortController();
 
       await new Promise<void>((resolve, reject) => {
         const timeout = setTimeout(() => {
@@ -144,6 +142,5 @@ export class MediaEngine {
     this.worker = null;
     this.workerReady = false;
     this.warmupPromise = null;
-    this.abortController = null;
   }
 }

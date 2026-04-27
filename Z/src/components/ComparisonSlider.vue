@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { t } from '../locales/i18n';
 
 const props = defineProps<{ originalUrl: string; compressedUrl: string }>();

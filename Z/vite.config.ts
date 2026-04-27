@@ -6,7 +6,7 @@ import basicSsl from '@vitejs/plugin-basic-ssl'
 export default defineConfig({
   plugins: [vue(), basicSsl()],
   server: {
-    https: true,
+    https: {},
     host: true, // 监听所有地址，兼容代理 TUN 模式
     headers: {
       // 开启跨域隔离，解锁 SharedArrayBuffer 和 FFmpeg 多线程

@@ -126,7 +126,7 @@ export class FfmpegEngine {
     await this.ffmpeg.deleteFile(inputName).catch(() => {});
     await this.ffmpeg.deleteFile(outputName).catch(() => {});
 
-    return new Blob([data], { type: `video/${options.outputFormat}` });
+    return new Blob([data as BlobPart], { type: `video/${options.outputFormat}` });
   }
 
   private buildArgs(input: string, output: string, opt: CompressionOptions): string[] {

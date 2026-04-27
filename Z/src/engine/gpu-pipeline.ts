@@ -24,7 +24,8 @@ export class GpuPipeline {
     const adapter = await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' });
     if (!adapter) return { available: false, adapterName: 'N/A', features: [] };
 
-    const adapterInfo = await adapter.requestAdapterInfo();
+    // adapter.info 替代 deprecated 的 requestAdapterInfo()（Chrome >= 124）
+    const adapterInfo = adapter.info;
     this.device = await adapter.requestDevice();
     this.sampler = this.device.createSampler({ magFilter: 'linear', minFilter: 'linear' });
 

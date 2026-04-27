@@ -9,8 +9,7 @@ import {
   fileSizeStr, statusPrefix, compressionRatio, fmtTime,
   type QueueItem,
 } from '../composables/useCompressionQueue';
-import { isLoggedIn } from '../composables/useAuth';
-import { canCompress, afterCompress } from '../composables/useUsageLimit';
+import { afterCompress } from '../composables/useUsageLimit';
 import { checkAndGate } from '../composables/useCompressGate';
 import { fetchGlobalStats, reportStats, globalSavedBytes, globalTotalFiles, formatBytes } from '../composables/useGlobalStats';
 import { isOutputDirSupported, autoSaveEnabled, dirName, pickDir, clearDir, autoSave } from '../composables/useOutputDir';

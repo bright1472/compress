@@ -2,15 +2,14 @@
 import { ref, computed, watch, watchEffect, inject, onMounted } from 'vue';
 import type { EngineRouter } from '../engine/engine-router';
 import ComparisonSlider from './ComparisonSlider.vue';
-import { t, currentLocale } from '../locales/i18n';
+import { t } from '../locales/i18n';
 import { logger } from '../engine/logger';
 import {
   useCompressionQueue,
   fileSizeStr, statusPrefix, compressionRatio, fmtTime,
   type QueueItem,
 } from '../composables/useCompressionQueue';
-import { isLoggedIn } from '../composables/useAuth';
-import { canCompress, afterCompress } from '../composables/useUsageLimit';
+import { afterCompress } from '../composables/useUsageLimit';
 import { checkAndGate } from '../composables/useCompressGate';
 import { fetchGlobalStats, reportStats, globalSavedBytes, globalTotalFiles, formatBytes } from '../composables/useGlobalStats';
 import { isOutputDirSupported, autoSaveEnabled, dirName, pickDir, clearDir, autoSave } from '../composables/useOutputDir';
