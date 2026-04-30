@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, watch, watchEffect, inject, onMounted } from 'vue';
 import type { EngineRouter } from '../engine/engine-router';
+import type { NativeProgress } from '../engine/native-host-engine';
 import ComparisonSlider from './ComparisonSlider.vue';
 import { t } from '../locales/i18n';
 import { logger } from '../engine/logger';
@@ -207,7 +208,39 @@ watchEffect(() => {
   if (q.activeItem.value?.status === 'done') mobileTab.value = 'stage';
 });
 
-onMounted(fetchGlobalStats);
+// ── Native Host（极速模式）────────────────────────────────────────
+const nativeEngine = router.getNativeHostEngine();
+const nativeHostAvailable = ref(false);
+const nativeMode = ref(localStorage.getItem('titan-native-mode') === '1');
+const showExtIdInput = ref(false);
+const extensionIdDraft = ref(nativeEngine.extensionId ?? '');
+const nativeInputDir = ref('');
+const nativeOutputDir = ref('');
+const nativeRunning = ref(false);
+const nativeProgressVal = ref<NativeProgress | null>(null);
+
+watch(nativeMode, (v) => localStorage.setItem('titan-native-mode', v ? '1' : '0'));
+
+const checkNative = async () => { nativeHostAvailable.value = await router.isNativeHostAvailable(); };
+const saveExtId = () => { nativeEngine.setExtensionId(extensionIdDraft.value); showExtIdInput.value = false; checkNative(); };
+const handleNativePickInput = async () => { const d = await nativeEngine.pickDir(); if (d) nativeInputDir.value = d; };
+const handleNativePickOutput = async () => { const d = await nativeEngine.pickDir(); if (d) nativeOutputDir.value = d; };
+const handleNativeStart = async () => {
+  if (!nativeInputDir.value || !nativeOutputDir.value || nativeRunning.value) return;
+  nativeRunning.value = true; nativeProgressVal.value = null;
+  try {
+    await router.compressWithNativeHost(
+      nativeInputDir.value, nativeOutputDir.value,
+      { codec: codec.value, crf: crf.value, preset: preset.value },
+      (p) => { nativeProgressVal.value = p; },
+    );
+    nativeEngine.openOutputDir(nativeOutputDir.value);
+  } catch (e) {
+    logger.error('system', `[native] ${e instanceof Error ? e.message : String(e)}`);
+  } finally { nativeRunning.value = false; }
+};
+
+onMounted(() => { fetchGlobalStats(); if (nativeEngine.extensionId) checkNative(); });
 
 defineExpose({
   isRunning: q.isRunning,
@@ -235,6 +268,17 @@ defineExpose({
       <div v-if="isCpuMode" class="cpu-mode-banner">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M9 9h6v6H9z" fill="currentColor" opacity=".4"/><path d="M2 9h2M2 15h2M20 9h2M20 15h2M9 2v2M15 2v2M9 20v2M15 20v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
         <span>{{ t('process.cpuModeHint') }}</span>
+      </div>
+    </Transition>
+
+    <!-- Native Host 极速模式进度 -->
+    <Transition name="toast">
+      <div v-if="nativeRunning" class="cpu-mode-banner" style="color:#22c55e;border-color:#22c55e44">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/></svg>
+        <span v-if="nativeProgressVal">
+          ⚡ {{ nativeProgressVal.file }} · {{ nativeProgressVal.percent }}% · {{ nativeProgressVal.fps }} fps · ETA {{ nativeProgressVal.eta }}
+        </span>
+        <span v-else>⚡ 极速模式压缩中…</span>
       </div>
     </Transition>
 
@@ -505,6 +549,59 @@ defineExpose({
               {{ t('outputDir.pick') }}
             </button>
             <p class="sp-hint">{{ t('outputDir.hint') }}</p>
+          </div>
+
+          <!-- Native Host 极速模式 -->
+          <div class="sp-section native-section">
+            <div class="sp-section-label-row">
+              <span class="sp-section-label">⚡ 极速模式（Native Host）</span>
+              <button
+                v-if="nativeHostAvailable"
+                class="native-toggle"
+                :class="{ active: nativeMode }"
+                @click="nativeMode = !nativeMode"
+              >{{ nativeMode ? '已启用' : '启用' }}</button>
+            </div>
+            <div v-if="!nativeHostAvailable" class="native-unavailable">
+              <p class="sp-hint">未检测到 Titan 扩展。安装并配置 Extension ID 后可启用。</p>
+              <button class="output-dir-pick-btn" @click="showExtIdInput = !showExtIdInput" style="margin-top:6px">
+                ⚙ 设置 Extension ID
+              </button>
+            </div>
+            <div v-if="showExtIdInput || !nativeHostAvailable" class="ext-id-row" style="margin-top:8px">
+              <input
+                v-model="extensionIdDraft"
+                class="ext-id-input"
+                placeholder="粘贴 Chrome 扩展 ID…"
+                @keydown.enter="saveExtId"
+              />
+              <button class="output-dir-pick-btn" @click="saveExtId">保存</button>
+            </div>
+            <div v-if="nativeMode && nativeHostAvailable" class="native-dirs" style="margin-top:10px; display:flex; flex-direction:column; gap:6px">
+              <div class="native-dir-row">
+                <span class="sp-hint" style="min-width:60px">输入目录</span>
+                <button class="output-dir-pick-btn" @click="handleNativePickInput">
+                  {{ nativeInputDir || '选择…' }}
+                </button>
+              </div>
+              <div class="native-dir-row">
+                <span class="sp-hint" style="min-width:60px">输出目录</span>
+                <button class="output-dir-pick-btn" @click="handleNativePickOutput">
+                  {{ nativeOutputDir || '选择…' }}
+                </button>
+              </div>
+              <div v-if="nativeProgressVal" class="sp-hint" style="margin-top:4px">
+                {{ nativeProgressVal.file }} · {{ nativeProgressVal.percent }}% · {{ nativeProgressVal.fps }} fps · {{ nativeProgressVal.eta }}
+              </div>
+              <button
+                class="btn-primary"
+                :disabled="!nativeInputDir || !nativeOutputDir || nativeRunning"
+                @click="handleNativeStart"
+                style="margin-top:4px"
+              >
+                {{ nativeRunning ? '压缩中…' : '⚡ 开始极速压缩' }}
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -4,6 +4,12 @@
   "manifest_version": 3,
   "description": "GPU 硬件加速视频压缩引擎 — 本地原生编码",
   "permissions": ["nativeMessaging", "storage"],
+  "externally_connectable": {
+    "matches": [
+      "http://localhost:*/*",
+      "http://127.0.0.1:*/*"
+    ]
+  },
   "background": {
     "service_worker": "background.js"
   },

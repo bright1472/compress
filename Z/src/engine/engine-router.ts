@@ -15,6 +15,8 @@ import type { CompressionOptions, ProgressCallback } from './ffmpeg-engine';
 import { MediaEngine } from './processor';
 import { ImageEngine } from './image-engine';
 import type { ImageCompressionOptions } from './image-engine';
+import { NativeHostEngine } from './native-host-engine';
+import type { NativeCompressOptions, NativeProgress } from './native-host-engine';
 import { logger } from './logger';
 
 export type EngineType = 'webcodecs-hw' | 'webcodecs-sw' | 'ffmpeg-mt' | 'ffmpeg-st';
@@ -68,6 +70,7 @@ export class EngineRouter {
   private ffmpegEngine: FfmpegEngine;
   private webCodecsEngine: MediaEngine;
   private imageEngine: ImageEngine;
+  private nativeHostEngine: NativeHostEngine;
 
   private _tier: (1 | 2 | 3 | 4) | null = null;
   private _routePromise: Promise<RouteDecision> | null = null;
@@ -78,10 +81,12 @@ export class EngineRouter {
     this.ffmpegEngine = new FfmpegEngine();
     this.webCodecsEngine = new MediaEngine();
     this.imageEngine = new ImageEngine();
+    this.nativeHostEngine = new NativeHostEngine();
 
     // Background preload — whichever engine ends up being used will be warm.
     this.ffmpegEngine.preload();
     this.webCodecsEngine.warmup().catch(() => {});
+    this.imageEngine.warmupEncoders();
   }
 
   /** Resolve and cache the tier. Safe to call multiple times. */
@@ -193,6 +198,25 @@ export class EngineRouter {
   }
 
   getFfmpegEngine(): FfmpegEngine { return this.ffmpegEngine; }
+
+  getNativeHostEngine(): NativeHostEngine { return this.nativeHostEngine; }
+
+  /** 检查 Native Host 是否可用（扩展已安装 + Rust host 已注册）。 */
+  isNativeHostAvailable(): Promise<boolean> { return this.nativeHostEngine.isAvailable(); }
+
+  /**
+   * 极速模式压缩：通过 Chrome Extension → Rust Native Host → 系统 FFmpeg。
+   * 适用于 4K 视频，速度比 FFmpeg WASM 快 10–30 倍。
+   * 注意：inputDir / outputDir 是文件系统路径，由 pickDir() 获取。
+   */
+  async compressWithNativeHost(
+    inputDir: string,
+    outputDir: string,
+    options: NativeCompressOptions,
+    onProgress?: (p: NativeProgress) => void,
+  ): Promise<void> {
+    await this.nativeHostEngine.compress(inputDir, outputDir, options, onProgress);
+  }
 
   terminate(): void {
     this._terminated = true;

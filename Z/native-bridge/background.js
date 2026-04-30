@@ -149,3 +149,72 @@ function openOutputDir(payload) {
   if (!nativePort) return;
   nativePort.postMessage({ type: 'open_dir', path: payload.path });
 }
+
+// ── 外部网站连接（externally_connectable）────────────────────────────
+// 网站用 chrome.runtime.connect() 建立长连接，支持流式 progress 回调。
+// sendMessage 只能单次回调，compress 的多次 progress 必须走 Port。
+chrome.runtime.onConnectExternal.addListener((port) => {
+  port.onMessage.addListener((msg) => {
+    switch (msg.type) {
+      case 'DETECT_NATIVE':
+        detectNative((res) => { try { port.postMessage(res); } catch {} });
+        break;
+      case 'PICK_DIR':
+        handlePickDir((res) => { try { port.postMessage(res); } catch {} });
+        break;
+      case 'LIST_FILES':
+        handleListFiles(msg, (res) => { try { port.postMessage(res); } catch {} });
+        break;
+      case 'COMPRESS_REQUEST':
+        handleCompressPort(msg, port);
+        break;
+      case 'OPEN_OUTPUT_DIR':
+        openOutputDir(msg);
+        break;
+    }
+  });
+});
+
+function handleCompressPort(msg, port) {
+  if (!nativePort) {
+    try { port.postMessage({ type: 'error', message: 'Native host not connected' }); } catch {}
+    return;
+  }
+
+  const requestId = nextRequestId++;
+
+  const onNativeMsg = (response) => {
+    if (response._requestId !== requestId) return;
+    try {
+      switch (response.type) {
+        case 'progress':
+          port.postMessage({ type: 'progress', file: response.file, percent: response.percent, fps: response.fps, eta: response.eta });
+          break;
+        case 'complete':
+          nativePort.onMessage.removeListener(onNativeMsg);
+          port.postMessage({ type: 'complete', total: response.total, durationSec: response.durationSec });
+          break;
+        case 'error':
+          nativePort.onMessage.removeListener(onNativeMsg);
+          port.postMessage({ type: 'error', message: response.message });
+          break;
+      }
+    } catch {
+      // port disconnected — clean up listener
+      nativePort.onMessage.removeListener(onNativeMsg);
+    }
+  };
+
+  port.onDisconnect.addListener(() => nativePort?.onMessage.removeListener(onNativeMsg));
+
+  nativePort.onMessage.addListener(onNativeMsg);
+  nativePort.postMessage({
+    type: 'compress',
+    _requestId: requestId,
+    inputDir: msg.inputDir,
+    outputDir: msg.outputDir,
+    codec: msg.codec,
+    crf: msg.crf,
+    preset: msg.preset,
+  });
+}

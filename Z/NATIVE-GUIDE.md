@@ -15,23 +15,25 @@
 ### 工作原理
 
 ```
-Web UI (Dashboard.vue)
-  ├── 自动检测 Native Host
-  ├── 已安装 → 显示 🚀 极速模式入口
-  └── 未安装 → 继续用 WebCodecs / FFmpeg WASM
+网站 UI (VideoCompressor.vue)
+  ├── 设置面板 → "极速模式" → 粘贴 Extension ID → 检测可用性
+  ├── 可用 → 启用极速模式开关 → 选择输入/输出目录 → 开始压缩
+  └── 不可用 → 自动降级到 WebCodecs / FFmpeg WASM
        │
+       │  chrome.runtime.connect(extensionId)  ← Port 长连接
        ▼
 Chrome Extension (native-bridge/)
-  ├── 扩展页 UI：选择目录、设置参数、查看进度
-  ├── background.js：管理 Native Messaging 连接
+  ├── background.js：onConnectExternal 接收网站连接
+  ├── 流式中继：progress / complete / error → 网站实时显示
+  ├── Native Messaging 管理与 Rust host 的连接
   │
-  ▼  stdin/stdout (JSON only)
+  ▼  stdin / stdout（仅 JSON）
   │
 Rust Native Host (titan-host.exe, ~1.7MB)
   ├── 扫描输入目录下的视频文件
-  ├── 自动检测 GPU 编码器 (NVENC > QSV > AMF)
+  ├── 自动检测 GPU 编码器（NVENC > QSV > AMF > libx264）
   ├── 调用 FFmpeg 逐个编码
-  ├── 解析 stderr 实时推送进度
+  ├── 解析 stderr 实时推送进度（FPS / ETA / 百分比）
   │
   ▼  直接写磁盘
   │
@@ -119,12 +121,30 @@ powershell -ExecutionPolicy Bypass -File install-titan-host.ps1
    ```
 4. 回到 `chrome://extensions`，点击 Titan 扩展的 **重新加载** 按钮
 
-### 步骤 6：验证安装
+### 步骤 6：将 Extension ID 配置到网站
 
+打开网站（`npm run dev` 后访问 `http://localhost:5173`）：
+
+1. 点击右上角 **设置**（齿轮图标）
+2. 滚动到最底部找到 **⚡ 极速模式（Native Host）**
+3. 点击 **⚙ 设置 Extension ID**
+4. 粘贴步骤 5 中记录的 Extension ID，回车或点击 **保存**
+5. 保存成功后显示 **启用** 按钮，点击即可开启极速模式
+
+> Extension ID 存储在浏览器 localStorage，重新打开页面后无需再次输入。
+
+### 步骤 7：验证安装
+
+**方式 A — 通过网站验证（推荐）**：
+1. 打开网站设置面板 → 极速模式区域
+2. 配置 Extension ID 后点击保存
+3. 出现"启用"按钮且无错误提示 → 安装成功
+4. 点击"启用"后选择输入/输出目录，点击"⚡ 开始极速压缩"
+
+**方式 B — 通过扩展图标验证**：
 1. 点击浏览器工具栏的 Titan 扩展图标
 2. 顶部应显示 **GPU 引擎就绪: h264_nvenc**（或对应你的硬件）
-3. 绿色状态栏显示 `GPU 引擎就绪`
-4. 如果显示"未检测到 Native Host"，检查：
+3. 如果显示"未检测到 Native Host"，检查：
    - FFmpeg 是否在 PATH 中
    - 注册表路径是否正确
    - Extension ID 是否已更新到 titan-host.json
@@ -135,19 +155,23 @@ powershell -ExecutionPolicy Bypass -File install-titan-host.ps1
 
 ### 3.1 基本流程
 
+**通过网站使用（推荐）**：
+
+1. **开启极速模式**：打开网站 → 设置面板 → 极速模式 → 点击"启用"
+2. **选择目录**：点击"输入目录 → 选择…"，系统文件选择器弹出后选择视频所在文件夹；同样选择输出目录
+3. **调整参数**：编码 / CRF / 速度预设（与正常模式共享设置）
+4. **开始压缩**：点击"⚡ 开始极速压缩"
+5. **查看进度**：页面顶部绿色 banner 实时显示文件名 / 百分比 / FPS / ETA
+6. **完成**：压缩完成后自动打开输出目录
+
+**通过扩展图标使用（独立模式）**：
+
 1. **打开极速模式**：点击浏览器工具栏的 Titan 扩展图标
 2. **输入目录**：粘贴包含视频文件的文件夹路径，按回车
-   - 如：`C:\Videos\input`
-   - 支持格式：MP4、MOV、MKV、AVI、WebM、FLV、WMV 等
-3. **输出目录**（可选）：粘贴输出文件夹路径，留空则输出到输入目录
-4. **设置参数**：
-   - **编码**：H.264 / H.265 / AV1
-   - **质量 (CRF)**：18-40，默认 28（数字越小质量越高）
-   - **速度预设**：p1(最快) ~ p7(最慢/最高质量)，默认 p4
-5. **开始压缩**：点击"开始压缩"按钮
-6. **查看进度**：文件列表实时显示进度条、FPS、剩余时间
-7. **完成**：状态栏显示"全部完成！共 X 个文件，总耗时 XmYs"
-8. **打开输出目录**：点击"📁 打开输出目录"
+3. **输出目录**（可选）：留空则输出到输入目录
+4. **开始压缩**：点击"开始压缩"按钮
+5. **查看进度**：文件列表实时显示进度条、FPS、剩余时间
+6. **完成**：点击"📁 打开输出目录"
 
 ### 3.2 参数说明
 
