@@ -212,8 +212,8 @@ watchEffect(() => {
 const nativeEngine = router.getNativeHostEngine();
 const nativeHostAvailable = ref(false);
 const nativeMode = ref(localStorage.getItem('titan-native-mode') === '1');
-const showExtIdInput = ref(false);
 const extensionIdDraft = ref(nativeEngine.extensionId ?? '');
+const nativeCheckStatus = ref<'idle' | 'checking' | 'ok' | 'fail'>('idle');
 const nativeInputDir = ref('');
 const nativeOutputDir = ref('');
 const nativeRunning = ref(false);
@@ -221,8 +221,16 @@ const nativeProgressVal = ref<NativeProgress | null>(null);
 
 watch(nativeMode, (v) => localStorage.setItem('titan-native-mode', v ? '1' : '0'));
 
-const checkNative = async () => { nativeHostAvailable.value = await router.isNativeHostAvailable(); };
-const saveExtId = () => { nativeEngine.setExtensionId(extensionIdDraft.value); showExtIdInput.value = false; checkNative(); };
+const checkNative = async () => {
+  nativeCheckStatus.value = 'checking';
+  const ok = await router.isNativeHostAvailable();
+  nativeHostAvailable.value = ok;
+  nativeCheckStatus.value = ok ? 'ok' : 'fail';
+};
+const saveExtId = async () => {
+  nativeEngine.setExtensionId(extensionIdDraft.value);
+  await checkNative();
+};
 const handleNativePickInput = async () => { const d = await nativeEngine.pickDir(); if (d) nativeInputDir.value = d; };
 const handleNativePickOutput = async () => { const d = await nativeEngine.pickDir(); if (d) nativeOutputDir.value = d; };
 const handleNativeStart = async () => {
@@ -271,8 +279,8 @@ defineExpose({
       </div>
     </Transition>
 
-    <!-- Native Host 极速模式进度 -->
-    <Transition name="toast">
+    <!-- Native Host 极速模式进度 [PAUSED - v-if="false"] -->
+    <Transition v-if="false" name="toast">
       <div v-if="nativeRunning" class="cpu-mode-banner" style="color:#22c55e;border-color:#22c55e44">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/></svg>
         <span v-if="nativeProgressVal">
@@ -551,8 +559,8 @@ defineExpose({
             <p class="sp-hint">{{ t('outputDir.hint') }}</p>
           </div>
 
-          <!-- Native Host 极速模式 -->
-          <div class="sp-section native-section">
+          <!-- Native Host 极速模式 [PAUSED - v-if="false"] -->
+          <div v-if="false" class="sp-section native-section">
             <div class="sp-section-label-row">
               <span class="sp-section-label">⚡ 极速模式（Native Host）</span>
               <button
@@ -562,42 +570,53 @@ defineExpose({
                 @click="nativeMode = !nativeMode"
               >{{ nativeMode ? '已启用' : '启用' }}</button>
             </div>
-            <div v-if="!nativeHostAvailable" class="native-unavailable">
-              <p class="sp-hint">未检测到 Titan 扩展。安装并配置 Extension ID 后可启用。</p>
-              <button class="output-dir-pick-btn" @click="showExtIdInput = !showExtIdInput" style="margin-top:6px">
-                ⚙ 设置 Extension ID
-              </button>
-            </div>
-            <div v-if="showExtIdInput || !nativeHostAvailable" class="ext-id-row" style="margin-top:8px">
+
+            <!-- Extension ID 输入行 -->
+            <div class="ext-id-row" style="margin-top:8px; display:flex; gap:6px; align-items:center">
               <input
                 v-model="extensionIdDraft"
                 class="ext-id-input"
-                placeholder="粘贴 Chrome 扩展 ID…"
+                placeholder="粘贴 Chrome 扩展 ID 后点击检测"
+                style="flex:1; font-size:11px"
                 @keydown.enter="saveExtId"
               />
-              <button class="output-dir-pick-btn" @click="saveExtId">保存</button>
+              <button
+                class="output-dir-pick-btn"
+                :disabled="!extensionIdDraft || nativeCheckStatus === 'checking'"
+                @click="saveExtId"
+              >{{ nativeCheckStatus === 'checking' ? '检测中…' : '检测' }}</button>
             </div>
-            <div v-if="nativeMode && nativeHostAvailable" class="native-dirs" style="margin-top:10px; display:flex; flex-direction:column; gap:6px">
-              <div class="native-dir-row">
-                <span class="sp-hint" style="min-width:60px">输入目录</span>
-                <button class="output-dir-pick-btn" @click="handleNativePickInput">
-                  {{ nativeInputDir || '选择…' }}
+
+            <!-- 检测状态反馈 -->
+            <p v-if="nativeCheckStatus === 'ok'" class="sp-hint" style="color:#22c55e;margin-top:4px">
+              ✅ 已连接 — Titan 扩展和 Native Host 均可用
+            </p>
+            <p v-else-if="nativeCheckStatus === 'fail'" class="sp-hint" style="color:#ef4444;margin-top:4px">
+              ❌ 未检测到 — 请确认：①扩展已加载并重新加载 ②titan-host.json 中 ID 与此处一致
+            </p>
+            <p v-else-if="nativeCheckStatus === 'idle'" class="sp-hint" style="margin-top:4px">
+              输入 Extension ID 后点击「检测」验证连接
+            </p>
+
+            <!-- 已连接：目录选择和压缩按钮 -->
+            <div v-if="nativeMode && nativeHostAvailable" style="margin-top:10px; display:flex; flex-direction:column; gap:6px">
+              <div style="display:flex; align-items:center; gap:8px">
+                <span class="sp-hint" style="min-width:60px;flex-shrink:0">输入目录</span>
+                <button class="output-dir-pick-btn" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" @click="handleNativePickInput">
+                  {{ nativeInputDir || '点击选择…' }}
                 </button>
               </div>
-              <div class="native-dir-row">
-                <span class="sp-hint" style="min-width:60px">输出目录</span>
-                <button class="output-dir-pick-btn" @click="handleNativePickOutput">
-                  {{ nativeOutputDir || '选择…' }}
+              <div style="display:flex; align-items:center; gap:8px">
+                <span class="sp-hint" style="min-width:60px;flex-shrink:0">输出目录</span>
+                <button class="output-dir-pick-btn" style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" @click="handleNativePickOutput">
+                  {{ nativeOutputDir || '点击选择…' }}
                 </button>
-              </div>
-              <div v-if="nativeProgressVal" class="sp-hint" style="margin-top:4px">
-                {{ nativeProgressVal.file }} · {{ nativeProgressVal.percent }}% · {{ nativeProgressVal.fps }} fps · {{ nativeProgressVal.eta }}
               </div>
               <button
                 class="btn-primary"
                 :disabled="!nativeInputDir || !nativeOutputDir || nativeRunning"
                 @click="handleNativeStart"
-                style="margin-top:4px"
+                style="margin-top:2px"
               >
                 {{ nativeRunning ? '压缩中…' : '⚡ 开始极速压缩' }}
               </button>

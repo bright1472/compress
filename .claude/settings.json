@@ -39,7 +39,9 @@
       "Bash(npx vite *)",
       "PowerShell($log = Get-Content \"e:\\\\resource\\\\wx-proj\\\\compress\\\\Z\\\\log.md\" 2>$null; if \\($log\\) { $perfLines = $log | Select-String \"Perf|Watchdog\" | ForEach-Object { $_.Line }; Write-Host \"Total Perf lines: $\\($perfLines.Count\\)\"; if \\($perfLines.Count -gt 0\\) { $last = $perfLines[-1]; Write-Host \"Last line: $last\" } })",
       "Bash(gh pr *)",
-      "Read(//c/Users/cms/.claude/projects/e--resource-wx-proj-compress/6566d6a4-8a2c-4aae-84dd-7f2c595e832e/tool-results/**)"
+      "Read(//c/Users/cms/.claude/projects/e--resource-wx-proj-compress/6566d6a4-8a2c-4aae-84dd-7f2c595e832e/tool-results/**)",
+      "PowerShell(ffmpeg -version 2>&1)",
+      "PowerShell(Get-Content \"$env:LOCALAPPDATA\\\\TitanHost\\\\titan-host.json\" | Out-String)"
     ]
   }
 }

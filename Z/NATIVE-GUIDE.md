@@ -1,5 +1,10 @@
 # Titan 极速模式 — 安装与使用指引
 
+> ⚠️ **[暂停]** 此功能已暂时禁用（UI 已注释），文档保留供后续恢复参考。
+> 恢复方法：在 `VideoCompressor.vue` 中将 `v-if="false"` 的两处 native host 区块重新启用。
+
+---
+
 > Chrome Extension + Rust Native Host + FFmpeg GPU 硬件加速
 > 速度可达 WebCodecs 模式的 10-50 倍
 
@@ -278,7 +283,107 @@ Constant Rate Factor，控制输出质量：
 
 ---
 
-## 6. 卸载
+## 6. 发版与用户分发
+
+### 6.1 开发阶段自测（当前推荐）
+
+适用于本地开发环境，无需上架任何平台。
+
+**前提**：`titan-host.exe` 已编译（`cargo build --release` 完成）
+
+```powershell
+# 步骤 1：注册 Native Host（每台机器只需执行一次）
+cd Z\native-host
+powershell -ExecutionPolicy Bypass -File install-titan-host.ps1
+
+# 步骤 2：启动开发服务器
+cd Z
+npm run dev
+```
+
+然后：
+1. `chrome://extensions` → 开发者模式 → 加载已解压的扩展程序 → 选择 `Z/native-bridge/`
+2. 记录 Extension ID（形如 `abcdefghijklmnopqrstuvwxyz123456`）
+3. 如果 ID 与 `native-host/titan-host.json` 中 `allowed_origins` 里的 ID 不符 → 更新 json → 重新加载扩展
+4. 打开 `http://localhost:5173` → 设置 → 极速模式 → 粘贴 Extension ID → 保存 → 启用
+
+---
+
+### 6.2 正式发版：两种分发路线
+
+#### 路线 A — 发布到 Chrome Web Store（推荐，面向普通用户）
+
+| 项目 | 说明 |
+|------|------|
+| Extension ID | 上架后**永久固定**，全球所有用户相同 |
+| 用户操作 | Chrome 商店搜索安装，一键完成 |
+| 安全性 | 经过 Google 审核，用户信任度高 |
+| 费用 | 一次性 $5 开发者注册费 |
+| 审核周期 | 首次 1-3 个工作日 |
+
+**发布步骤**：
+1. 打包扩展：压缩 `Z/native-bridge/` 目录为 zip
+2. 登录 [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole)
+3. 上传 zip，填写描述、截图、隐私声明
+4. 提交审核，等待通过后获得固定 Extension ID
+
+**上架后的代码调整**（重要）：
+```typescript
+// Z/src/engine/native-host-engine.ts
+// 将固定 ID 作为默认值，用户无需手动粘贴
+const PUBLISHED_EXTENSION_ID = '你的正式 Extension ID';
+
+constructor() {
+  // 优先用 localStorage 中的自定义 ID（高级用户），否则用固定 ID
+  this._extensionId = localStorage.getItem(STORAGE_KEY) ?? PUBLISHED_EXTENSION_ID;
+}
+```
+
+同时将正式域名加入 `manifest.json`：
+```json
+"externally_connectable": {
+  "matches": [
+    "http://localhost:*/*",
+    "https://你的正式域名.com/*"
+  ]
+}
+```
+
+用户体验最终变为：**安装扩展 → 运行安装程序 → 打开网站自动检测**，无需粘贴任何 ID。
+
+---
+
+#### 路线 B — 手动分发（适合内部工具 / 小范围使用）
+
+不上架商店，直接把安装包给用户。
+
+**分发物清单**：
+
+| 文件 | 来源 |
+|------|------|
+| `titan-setup.exe`（或 `.ps1`） | 打包：`titan-host.exe` + FFmpeg + 注册脚本 |
+| `titan-extension.zip` | 压缩 `Z/native-bridge/` 目录 |
+| `安装说明.md` | 本文档 Section 2 |
+
+**用户操作流程**：
+1. 运行 `titan-setup.exe` → 自动安装 Native Host 并注册
+2. Chrome 以开发者模式加载扩展（或拖入 `.crx` 文件）
+3. 复制 Extension ID → 粘贴到网站设置面板
+
+**缺点**：每台机器的 Extension ID 不同（unpacked 扩展），用户必须手动粘贴一次。
+
+---
+
+### 6.3 选择建议
+
+| 场景 | 建议路线 |
+|------|---------|
+| 本人 / 团队内部使用 | 路线 B，跑一次安装脚本即可 |
+| 小范围内测（< 50 人） | 路线 B + 本文档作安装说明 |
+| 公开发布给普通用户 | 路线 A（Chrome Web Store）|
+| 企业内网部署 | 路线 B + 组策略推送扩展（无需开发者模式）|
+
+## 7. 卸载
 
 ### 卸载 Native Host
 

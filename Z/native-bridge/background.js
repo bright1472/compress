@@ -33,25 +33,32 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 function detectNative(callback) {
   try {
+    console.log('[titan] detectNative: connecting to', HOST_NAME);
     const port = chrome.runtime.connectNative(HOST_NAME);
     const timeout = setTimeout(() => {
+      console.log('[titan] detectNative: TIMEOUT — no pong received');
       port.disconnect();
       callback({ available: false });
-    }, 2000);
+    }, 10000);
 
     port.onMessage.addListener((response) => {
-      if (response.type === 'pong') {
+      console.log('[titan] detectNative: received message', JSON.stringify(response));
+      if ((response.kind ?? response.type) === 'pong') {
         clearTimeout(timeout);
         nativePort = port;
+        console.log('[titan] detectNative: GOT PONG, encoders:', response.encoders);
         callback({ available: true, encoders: response.encoders || [] });
       }
     });
 
     port.onDisconnect.addListener(() => {
+      console.log('[titan] detectNative: port DISCONNECTED, lastError:', chrome.runtime.lastError?.message);
       clearTimeout(timeout);
       nativePort = null;
+      callback({ available: false });
     });
 
+    console.log('[titan] detectNative: sending ping');
     port.postMessage({ type: 'ping' });
   } catch {
     callback({ available: false });
@@ -69,7 +76,7 @@ function handleCompress(payload, callback) {
   const onMsg = (response) => {
     if (response._requestId !== requestId) return;
 
-    switch (response.type) {
+    switch (response.kind ?? response.type) {
       case 'progress':
         callback({
           type: 'progress',
@@ -119,7 +126,7 @@ function handlePickDir(callback) {
   }
   nativePort.postMessage({ type: 'pick_dir' });
   const onMsg = (response) => {
-    if (response.type === 'picked_dir') {
+    if ((response.kind ?? response.type) === 'picked_dir') {
       nativePort.onMessage.removeListener(onMsg);
       callback({ path: response.path });
     }
@@ -137,7 +144,7 @@ function handleListFiles(payload, callback) {
 
   // 一次性监听响应
   const onMsg = (response) => {
-    if (response.type === 'files') {
+    if ((response.kind ?? response.type) === 'files') {
       nativePort.onMessage.removeListener(onMsg);
       callback({ type: 'files', files: response.files });
     }
@@ -151,8 +158,27 @@ function openOutputDir(payload) {
 }
 
 // ── 外部网站连接（externally_connectable）────────────────────────────
-// 网站用 chrome.runtime.connect() 建立长连接，支持流式 progress 回调。
-// sendMessage 只能单次回调，compress 的多次 progress 必须走 Port。
+// 网站 sendMessage → onMessageExternal（一次性请求：DETECT_NATIVE / PICK_DIR / LIST_FILES）
+// 网站 connect()   → onConnectExternal（流式请求：COMPRESS_REQUEST）
+chrome.runtime.onMessageExternal.addListener((msg, _sender, sendResponse) => {
+  if (msg.type === 'DETECT_NATIVE') {
+    detectNative(sendResponse);
+    return true;
+  }
+  if (msg.type === 'PICK_DIR') {
+    handlePickDir(sendResponse);
+    return true;
+  }
+  if (msg.type === 'LIST_FILES') {
+    handleListFiles(msg, sendResponse);
+    return true;
+  }
+  if (msg.type === 'OPEN_OUTPUT_DIR') {
+    openOutputDir(msg);
+    return false;
+  }
+});
+
 chrome.runtime.onConnectExternal.addListener((port) => {
   port.onMessage.addListener((msg) => {
     switch (msg.type) {
@@ -186,7 +212,7 @@ function handleCompressPort(msg, port) {
   const onNativeMsg = (response) => {
     if (response._requestId !== requestId) return;
     try {
-      switch (response.type) {
+      switch (response.kind ?? response.type) {
         case 'progress':
           port.postMessage({ type: 'progress', file: response.file, percent: response.percent, fps: response.fps, eta: response.eta });
           break;

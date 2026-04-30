@@ -133,8 +133,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
         match req {
             Request::Ping => {
-                let encoders = detect_gpu_encoders();
-                let msg = serde_json::to_string(&PongMsg { kind: "pong".into(), encoders }).unwrap();
+                // 立即响应 pong，不等 GPU 检测（检测要跑多次 FFmpeg，可能超过 JS 端超时）
+                // encoders 在首次压缩请求时按需检测
+                let msg = serde_json::to_string(&PongMsg { kind: "pong".into(), encoders: vec![] }).unwrap();
                 send_message(&mut *stdout_clone.lock().await, &msg).await?;
             }
             Request::PickDir => {
