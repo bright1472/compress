@@ -8,12 +8,14 @@ const containerRef = ref<HTMLDivElement | null>(null);
 const originalVideoRef = ref<HTMLVideoElement | null>(null);
 const compressedVideoRef = ref<HTMLVideoElement | null>(null);
 const sliderX = ref(50);
+const originalError = ref(false);
+const compressedError = ref(false);
+
 let isDragging = false;
 let rafId = 0;
 let pendingX = 50;
 let syncing = false;
 
-// ── 滑块拖动 ──────────────────────────────────────────────────────
 const updateSlider = (clientX: number) => {
   if (!containerRef.value) return;
   const rect = containerRef.value.getBoundingClientRect();
@@ -36,43 +38,35 @@ const onDown = (e: MouseEvent | TouchEvent) => {
 };
 const onUp = () => { isDragging = false; };
 
-// ── 双流时间轴同步 ────────────────────────────────────────────────
 const syncVideos = () => {
   const orig = originalVideoRef.value;
   const comp = compressedVideoRef.value;
-  if (!orig || !comp || syncing) return;
+  if (!orig || !comp || syncing || originalError.value || compressedError.value) return;
 
   syncing = true;
-  // 以原始视频为基准同步压缩视频
   const drift = Math.abs(orig.currentTime - comp.currentTime);
   if (drift > 0.1) comp.currentTime = orig.currentTime;
 
-  // 同步播放/暂停状态
   if (!orig.paused && comp.paused) comp.play().catch(() => {});
   if (orig.paused && !comp.paused) comp.pause();
   syncing = false;
 };
 
 let syncInterval: ReturnType<typeof setInterval> | null = null;
+const startSync = () => { if (syncInterval) return; syncInterval = setInterval(syncVideos, 200); };
+const stopSync = () => { if (syncInterval) { clearInterval(syncInterval); syncInterval = null; } };
 
-const startSync = () => {
-  if (syncInterval) return;
-  syncInterval = setInterval(syncVideos, 200);
-};
-
-const stopSync = () => {
-  if (syncInterval) { clearInterval(syncInterval); syncInterval = null; }
-};
-
-// 原始视频 seek 时同步
 const onOriginalSeeked = () => {
   const comp = compressedVideoRef.value;
   const orig = originalVideoRef.value;
-  if (comp && orig) comp.currentTime = orig.currentTime;
+  if (comp && orig && !compressedError.value) comp.currentTime = orig.currentTime;
 };
 
-const onOriginalPlay = () => { compressedVideoRef.value?.play().catch(() => {}); startSync(); };
+const onOriginalPlay = () => { if (!compressedError.value) compressedVideoRef.value?.play().catch(() => {}); startSync(); };
 const onOriginalPause = () => { compressedVideoRef.value?.pause(); };
+
+const handleOriginalError = () => { originalError.value = true; stopSync(); };
+const handleCompressedError = () => { compressedError.value = true; };
 
 onMounted(() => {
   window.addEventListener('mousemove', onMove, { passive: true });
@@ -101,7 +95,11 @@ onUnmounted(() => {
   >
     <!-- 原片层 -->
     <div class="cs-layer">
-      <video ref="originalVideoRef" :src="props.originalUrl" class="cs-video" muted loop autoplay playsinline @seeked="onOriginalSeeked" @play="onOriginalPlay" @pause="onOriginalPause" />
+      <video v-if="!originalError" ref="originalVideoRef" :src="props.originalUrl" class="cs-video" muted loop autoplay playsinline @seeked="onOriginalSeeked" @play="onOriginalPlay" @pause="onOriginalPause" @error="handleOriginalError" />
+      <div v-else class="cs-error-msg">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="1.5"/><path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span>{{ t('slider.formatNotSupported') || '当前格式暂不支持预览' }}</span>
+      </div>
       <div class="cs-label cs-label-left">
         <span class="cs-dot original"></span>
         {{ t('slider.original') }}
@@ -110,7 +108,11 @@ onUnmounted(() => {
 
     <!-- 压缩层 -->
     <div class="cs-layer cs-top" :style="{ clipPath: `inset(0 0 0 ${sliderX}%)` }">
-      <video ref="compressedVideoRef" :src="props.compressedUrl" class="cs-video" muted loop autoplay playsinline />
+      <video v-if="!compressedError" ref="compressedVideoRef" :src="props.compressedUrl" class="cs-video" muted loop autoplay playsinline @error="handleCompressedError" />
+      <div v-else class="cs-error-msg">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="1.5"/><path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span>{{ t('slider.formatNotSupported') || '当前格式暂不支持预览' }}</span>
+      </div>
       <div class="cs-label cs-label-right">
         <span class="cs-dot compressed"></span>
         {{ t('slider.compressed') }}
@@ -118,7 +120,7 @@ onUnmounted(() => {
     </div>
 
     <!-- 分割线 -->
-    <div class="cs-divider" :style="{ left: `${sliderX}%` }">
+    <div v-if="!originalError && !compressedError" class="cs-divider" :style="{ left: `${sliderX}%` }">
       <div class="cs-handle" @mousedown.stop="onDown" @touchstart.stop.prevent="onDown">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
           <path d="M8 5L3 12L8 19M16 5L21 12L16 19" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
@@ -127,7 +129,7 @@ onUnmounted(() => {
     </div>
 
     <!-- 提示 -->
-    <div class="cs-hint" :style="{ opacity: isDragging ? 0 : 1 }">
+    <div v-if="!originalError && !compressedError" class="cs-hint" :style="{ opacity: isDragging ? 0 : 1 }">
       <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 9l-3 3 3 3M19 9l3 3-3 3M9 5l3-3 3 3M9 19l3 3 3-3" stroke="white" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
       {{ t('slider.dragToCompare') }}
     </div>
@@ -136,10 +138,10 @@ onUnmounted(() => {
 
 <style scoped>
 .cs-root { position: relative; width: 100%; height: 100%; overflow: hidden; border-radius: 0; cursor: col-resize; user-select: none; background: #000; flex: 1; }
-.cs-layer { position: absolute; inset: 0; }
-.cs-top { z-index: 2; }
+.cs-layer { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; background: #0a0a0f; }
+.cs-top { z-index: 2; border-left: 1px solid rgba(255,255,255,0.05); }
 .cs-video { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
-.cs-label { position: absolute; top: 16px; display: flex; align-items: center; gap: 6px; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.12em; color: white; background: rgba(0,0,0,0.55); backdrop-filter: blur(12px); padding: 5px 12px; border-radius: 999px; pointer-events: none; border: 1px solid rgba(255,255,255,0.12); }
+.cs-label { position: absolute; top: 16px; display: flex; align-items: center; gap: 6px; font-size: 0.62rem; font-weight: 700; letter-spacing: 0.12em; color: white; background: rgba(0,0,0,0.55); backdrop-filter: blur(12px); padding: 5px 12px; border-radius: 999px; pointer-events: none; border: 1px solid rgba(255,255,255,0.12); z-index: 5; }
 .cs-label-left { left: 16px; }
 .cs-label-right { right: 16px; }
 .cs-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
@@ -147,6 +149,9 @@ onUnmounted(() => {
 .cs-dot.compressed { background: #22c55e; }
 .cs-divider { position: absolute; top: 0; bottom: 0; width: 2px; background: rgba(255,255,255,0.85); transform: translateX(-50%); z-index: 10; pointer-events: none; }
 .cs-handle { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 48px; height: 48px; border-radius: 50%; background: rgba(255,255,255,0.12); backdrop-filter: blur(16px); border: 1.5px solid rgba(255,255,255,0.3); display: flex; align-items: center; justify-content: center; pointer-events: all; cursor: col-resize; transition: transform 0.2s cubic-bezier(0.34,1.56,0.64,1), background 0.2s; box-shadow: 0 4px 20px rgba(0,0,0,0.5); }
-.cs-handle:hover { transform: translate(-50%, -50%) scale(1.15); background: rgba(99,102,241,0.5); }
+.cs-handle:hover { transform: translate(-50%, -50%) scale(1.15); background: var(--c-accent); }
 .cs-hint { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); display: flex; align-items: center; gap: 6px; font-size: 0.72rem; font-weight: 600; color: rgba(255,255,255,0.6); background: rgba(0,0,0,0.45); backdrop-filter: blur(12px); padding: 6px 14px; border-radius: 999px; pointer-events: none; transition: opacity 0.3s ease; z-index: 20; border: 1px solid rgba(255,255,255,0.1); }
+
+.cs-error-msg { display: flex; flex-direction: column; align-items: center; gap: 12px; color: var(--c-text-muted); font-size: 0.75rem; font-weight: 600; text-align: center; padding: 40px; letter-spacing: 0.02em; }
+.cs-error-msg svg { opacity: 0.4; color: var(--c-accent); margin-bottom: 4px; }
 </style>

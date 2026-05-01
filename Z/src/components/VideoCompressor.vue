@@ -99,6 +99,11 @@ const isCpuMode = computed(() => q.isRunning.value && currentTier.value !== null
 
 // terminate() 触发后的取消标志，processItem 用它判断是否丢弃残缺输出
 const stopRequested = ref(false);
+const previewError = ref(false);
+
+watch(() => q.activeItem.value?.id, () => {
+  previewError.value = false;
+});
 
 const processItem = async (item: QueueItem) => {
   stopRequested.value = false;
@@ -455,7 +460,11 @@ defineExpose({
         </div>
 
         <div v-if="q.activeItem.value && (q.activeItem.value.status === 'pending' || q.activeItem.value.status === 'processing')" class="preview-stage" :class="{ 'is-processing': q.activeItem.value.status === 'processing' }">
-          <video :src="q.activeItem.value.originalUrl" class="preview-video" controls muted loop autoplay></video>
+          <video v-if="!previewError" :src="q.activeItem.value.originalUrl" class="preview-video" controls muted loop autoplay @error="previewError = true"></video>
+          <div v-else class="preview-error-wrap">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="1.5"/><path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+            <span>当前格式暂不支持预览播放</span>
+          </div>
           <div v-if="q.activeItem.value.status === 'pending'" class="preview-tip">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><path d="M12 8v4l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
             {{ t('process.configAndStart') }}
