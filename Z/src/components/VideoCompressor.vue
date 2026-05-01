@@ -101,10 +101,6 @@ const isCpuMode = computed(() => q.isRunning.value && currentTier.value !== null
 const stopRequested = ref(false);
 const previewError = ref(false);
 
-watch(() => q.activeItem.value?.id, () => {
-  previewError.value = false;
-});
-
 const processItem = async (item: QueueItem) => {
   stopRequested.value = false;
   if (!checkAndGate(openAuthModal, openActivationModal)) {
@@ -192,6 +188,10 @@ const q = useCompressionQueue({
   buildDownloadName,
   onStop: () => { stopRequested.value = true; router.terminate(); },
   onItemDone,
+});
+
+watch(() => q.activeItem.value?.id, () => {
+  previewError.value = false;
 });
 
 // ── 拖放 ──────────────────────────────────────────────────────────
@@ -312,7 +312,7 @@ defineExpose({
                 <svg v-if="viewMode === 'list'" width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/><line x1="12" y1="3" x2="12" y2="21" stroke="currentColor" stroke-width="2"/></svg>
                 <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="2"/><line x1="4" y1="10" x2="20" y2="10" stroke="currentColor" stroke-width="2"/><line x1="4" y1="16" x2="20" y2="16" stroke="currentColor" stroke-width="2"/></svg>
               </button>
-              <GuideBubble v-if="viewMode === 'list'" :enabled="q.doneCount.value > 0" storage-key="titan-guide-video-view" message="试试开启双屏对比预览" />
+              <GuideBubble v-if="viewMode === 'list'" :enabled="q.doneCount.value > 0" storage-key="titan-guide-video-view" :message="t('guide.viewToggle')" />
             </div>
           </div>
 
@@ -463,7 +463,7 @@ defineExpose({
           <video v-if="!previewError" :src="q.activeItem.value.originalUrl" class="preview-video" controls muted loop autoplay @error="previewError = true"></video>
           <div v-else class="preview-error-wrap">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" stroke="currentColor" stroke-width="1.5"/><path d="M12 8v4M12 16h.01" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-            <span>当前格式暂不支持预览播放</span>
+            <span>{{ t('slider.formatNotSupported') }}</span>
           </div>
           <div v-if="q.activeItem.value.status === 'pending'" class="preview-tip">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="1.5"/><path d="M12 8v4l3 3" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>

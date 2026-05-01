@@ -181,6 +181,11 @@
 .preview-image { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: var(--r-md); box-shadow: 0 8px 32px rgba(0,0,0,0.2); }
 .preview-tip { display: flex; align-items: center; gap: 6px; justify-content: center; font-size: 0.73rem; color: var(--c-text-muted); padding: 8px; flex-shrink: 0; background: rgba(0,0,0,0.4); backdrop-filter: blur(8px); }
 
+.preview-error-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; color: var(--c-text-muted); background: #0a0a0f; }
+.preview-error-wrap svg { color: var(--c-accent); opacity: 0.5; }
+.preview-error-wrap span { font-size: 0.82rem; font-weight: 600; }
+
+
 /* Minimal Processing Overlay */
 .proc-overlay { position: absolute; inset: 0; pointer-events: none; display: flex; flex-direction: column; z-index: 100; }
 .proc-top-bar { height: 4px; background: rgba(255,255,255,0.08); width: 100%; overflow: hidden; }

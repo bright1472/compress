@@ -125,6 +125,10 @@ export const zh = {
     original: 'ORIGINAL',
     compressed: 'COMPRESSED',
     dragToCompare: '拖动对比 · 时间轴已同步',
+    formatNotSupported: '当前格式暂不支持预览',
+  },
+  guide: {
+    viewToggle: '试试开启双屏对比预览',
   },
   console: {
     title: '诊断控制台',
@@ -305,6 +309,10 @@ export const en = {
     original: 'ORIGINAL',
     compressed: 'COMPRESSED',
     dragToCompare: 'Drag to compare · Timeline synced',
+    formatNotSupported: 'Format not supported for preview',
+  },
+  guide: {
+    viewToggle: 'Try split view comparison',
   },
   console: {
     title: 'Diagnostic Console',

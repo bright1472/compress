@@ -197,7 +197,7 @@ defineExpose({
                 <svg v-if="viewMode === 'list'" width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/><line x1="12" y1="3" x2="12" y2="21" stroke="currentColor" stroke-width="2"/></svg>
                 <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="2"/><line x1="4" y1="10" x2="20" y2="10" stroke="currentColor" stroke-width="2"/><line x1="4" y1="16" x2="20" y2="16" stroke="currentColor" stroke-width="2"/></svg>
               </button>
-              <GuideBubble v-if="viewMode === 'list'" :enabled="q.doneCount.value > 0" storage-key="titan-guide-image-view" message="试试开启双屏对比预览" />
+              <GuideBubble v-if="viewMode === 'list'" :enabled="q.doneCount.value > 0" storage-key="titan-guide-image-view" :message="t('guide.viewToggle')" />
             </div>
           </div>
 
