@@ -348,7 +348,9 @@ defineExpose({
                   </template>
                   <template v-else-if="item.status === 'processing'">
                     <span class="m-capsule src">{{ fileSizeStr(item.file.size) }}</span>
-                    <span class="m-capsule time">{{ fmtTime(item.elapsed) }}</span>
+                    <span class="m-capsule pct">{{ item.progress.toFixed(1) }}%</span>
+                    <span v-if="item.throughput > 0" class="m-capsule speed">{{ item.throughput.toFixed(1) }} MB/s</span>
+                    <span v-if="item.remaining > 0" class="m-capsule rem">-{{ fmtTime(item.remaining) }}</span>
                   </template>
                   <template v-else>
                     <span class="m-capsule src">{{ fileSizeStr(item.file.size) }}</span>

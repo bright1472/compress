@@ -9,7 +9,6 @@ import ActivationModal from './ActivationModal.vue';
 import { t, currentLocale, setLocale } from '../locales/i18n';
 import { logger } from '../engine/logger';
 import { mode, setMode } from '../composables/useModeToggle';
-import { fmtTime } from '../composables/useCompressionQueue';
 import { isLoggedIn, authUser, logout } from '../composables/useAuth';
 import { usageCount, isSubscribed, usageLimit, syncUsage } from '../composables/useUsageLimit';
 
@@ -56,11 +55,6 @@ const imageRunning = computed(() => !!imageRef.value?.isRunning);
 const videoTotal = computed(() => videoRef.value?.totalCount ?? 0);
 const imageTotal = computed(() => imageRef.value?.totalCount ?? 0);
 
-const activeRunning = computed(() => mode.value === 'video' ? videoRunning.value : imageRunning.value);
-const activeProcessing = computed(() => mode.value === 'video'
-  ? videoRef.value?.currentProcessing ?? null
-  : imageRef.value?.currentProcessing ?? null);
-
 const videoBadge = computed(() => videoRunning.value ? (videoRef.value?.currentProcessing ? 1 : 0) : 0);
 const imageBadge = computed(() => imageRunning.value ? (imageRef.value?.currentProcessing ? 1 : 0) : 0);
 
@@ -89,11 +83,6 @@ onUnmounted(() => {
 
 <template>
   <div class="app-shell">
-    <!-- 全局进度条：当前激活模式在运行时显示 -->
-    <div class="global-bar" v-if="activeRunning">
-      <div class="global-bar-fill" :style="{ width: (activeProcessing?.progress ?? 0) + '%' }"></div>
-    </div>
-
     <!-- ═══ HEADER ═══════════════════════════════════════════════ -->
     <header class="app-header">
       <div class="header-brand">
@@ -104,18 +93,6 @@ onUnmounted(() => {
           <span class="brand-name">{{ t('app.title') }}</span>
           <span class="brand-sub">{{ t('app.slogan') }}</span>
         </div>
-      </div>
-
-      <div class="header-center" v-if="activeRunning && activeProcessing">
-        <div class="hc-dot"></div>
-        <span class="hc-label">{{ t('process.compressing') }}</span>
-        <span class="hc-file">{{ activeProcessing.file.name }}</span>
-        <span class="hc-sep">·</span>
-        <span class="hc-rate">{{ activeProcessing.throughput.toFixed(1) }} MB/s</span>
-        <span class="hc-sep">·</span>
-        <span class="hc-prog">{{ activeProcessing.progress.toFixed(1) }}%</span>
-        <span class="hc-sep">·</span>
-        <span class="hc-prog">{{ t('process.remainingTime', { t: fmtTime(activeProcessing.remaining) }) }}</span>
       </div>
 
       <div class="header-right">
