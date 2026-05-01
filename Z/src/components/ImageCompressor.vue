@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch, inject, watchEffect, onMounted } from 'vue';
 import ImageComparison from './ImageComparison.vue';
+import GuideBubble from './GuideBubble.vue';
 import type { EngineRouter } from '../engine/engine-router';
 import { t } from '../locales/i18n';
 import { logger } from '../engine/logger';
@@ -190,12 +191,13 @@ defineExpose({
               <span class="queue-label">{{ t('queue.header') }}</span>
               <span class="qh-count">{{ q.doneCount.value }}/{{ q.totalCount.value }}</span>
             </div>
-            <div class="qh-right" style="display: flex; align-items: center; gap: 6px;">
+            <div class="qh-right" style="display: flex; align-items: center; gap: 6px; position: relative;">
+              <span v-if="q.doneCount.value > 0" class="qh-saved-pill">↓ {{ q.totalSavedMB.value.toFixed(1) }} MB</span>
               <button class="view-toggle-btn" @click="viewMode = viewMode === 'list' ? 'split' : 'list'" :title="viewMode === 'list' ? '切换至双屏对比' : '切换至纯净队列'">
                 <svg v-if="viewMode === 'list'" width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/><line x1="12" y1="3" x2="12" y2="21" stroke="currentColor" stroke-width="2"/></svg>
                 <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="2"/><line x1="4" y1="10" x2="20" y2="10" stroke="currentColor" stroke-width="2"/><line x1="4" y1="16" x2="20" y2="16" stroke="currentColor" stroke-width="2"/></svg>
               </button>
-              <span v-if="q.doneCount.value > 0" class="qh-saved-pill">↓ {{ q.totalSavedMB.value.toFixed(1) }} MB</span>
+              <GuideBubble v-if="viewMode === 'list'" :enabled="q.doneCount.value > 0" storage-key="titan-guide-image-view" message="试试开启双屏对比预览" />
             </div>
           </div>
 
