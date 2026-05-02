@@ -8,13 +8,13 @@ const _saved = (() => { try { return JSON.parse(localStorage.getItem(USAGE_KEY) 
 
 export const usageCount = ref<number>(_saved?.usageCount ?? 0);
 export const isSubscribed = ref<boolean>(_saved?.isSubscribed ?? false);
-export const usageLimit = 5;
+export const usageLimit = computed(() => (isLoggedIn.value ? 5 : 2));
 
 // 开发环境（vite dev / build --mode development）无限次数，便于调试
 const _devUnlimited = import.meta.env.DEV;
 
 export const canCompress = computed(
-  () => _devUnlimited || isSubscribed.value || usageCount.value < usageLimit,
+  () => _devUnlimited || isSubscribed.value || usageCount.value < usageLimit.value,
 );
 
 function saveLocal() {
@@ -22,11 +22,10 @@ function saveLocal() {
 }
 
 export async function syncUsage() {
-  if (!isLoggedIn.value) return;
   try {
-    const res = await api.get<{ usageCount: number; isSubscribed: boolean }>('/compress/usage');
-    usageCount.value = res.usageCount;
-    isSubscribed.value = res.isSubscribed;
+    const res = await api.get<{ usageCount: number; isSubscribed: boolean; limit: number }>('/compress/usage');
+    usageCount.value = Number(res.usageCount) || 0;
+    isSubscribed.value = !!res.isSubscribed;
     saveLocal();
   } catch {
     // keep local cache
@@ -37,13 +36,6 @@ export async function afterCompress() {
   if (_devUnlimited) return; // 开发环境不累计用量
   if (isSubscribed.value) return;
 
-  if (!isLoggedIn.value) {
-    // 未登录：本地计数
-    usageCount.value = Math.min(usageCount.value + 1, usageLimit);
-    saveLocal();
-    return;
-  }
-
   try {
     const res = await api.post<{ ok: boolean; usageCount: number }>('/compress/usage/increment');
     if (res.ok) {
@@ -51,8 +43,7 @@ export async function afterCompress() {
       saveLocal();
     }
   } catch {
-    usageCount.value = Math.min(usageCount.value + 1, usageLimit);
-    saveLocal();
+    // keep local cache
   }
 }
 

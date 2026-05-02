@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { activateLicense } from '../composables/useUsageLimit';
+import { usageCount, usageLimit, isSubscribed, activateLicense } from '../composables/useUsageLimit';
+import { isLoggedIn } from '../composables/useAuth';
 import { t } from '../locales/i18n';
 
 const emit = defineEmits<{ (e: 'close'): void }>();
@@ -55,16 +56,24 @@ async function submit() {
 
         <!-- 免费 vs Pro 对比 -->
         <div v-if="!success" class="act-compare">
-          <div class="act-plan act-plan-free">
-            <div class="act-plan-name">{{ t('activation.freeLabel') }}</div>
-            <div class="act-feat act-feat-dim">{{ t('activation.freeFeat1') }}</div>
+          <div class="act-plan act-plan-free" :class="{ 'act-plan-active': !isSubscribed }">
+            <div class="act-plan-name">
+              {{ isLoggedIn ? t('activation.freeLabel') : (t('activation.guestLabel') || '游客版') }}
+              <span v-if="!isSubscribed" class="act-status-badge">{{ t('activation.currentStatus') }}</span>
+            </div>
+            <div class="act-usage-box">
+              <div class="act-usage-label">{{ t('auth.usageDisplay', { n: (Number(usageCount) || 0), max: (Number(usageLimit) || 0) }) }}</div>
+              <div class="act-usage-bar"><div class="act-usage-fill" :style="{ width: ((Number(usageCount) || 0) / (isLoggedIn ? 5 : 2) * 100) + '%' }"></div></div>
+            </div>
+            <div class="act-feat act-feat-dim">{{ isLoggedIn ? t('activation.freeFeat1') : (t('activation.guestFeat') || '每天 2 次压缩/访客') }}</div>
             <div class="act-feat act-feat-dim">{{ t('activation.freeFeat2') }}</div>
             <div class="act-feat act-feat-dim">{{ t('activation.freeFeat3') }}</div>
           </div>
-          <div class="act-plan act-plan-pro">
+          <div class="act-plan act-plan-pro" :class="{ 'act-plan-active': isSubscribed }">
             <div class="act-plan-name">
               {{ t('activation.proLabel') }}
-              <span class="act-pro-badge">PRO</span>
+              <span v-if="isSubscribed" class="act-status-badge pro">{{ t('activation.currentStatus') }}</span>
+              <span v-else class="act-pro-badge">OFFICIAL</span>
             </div>
             <div class="act-feat">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -82,7 +91,14 @@ async function submit() {
           </div>
         </div>
 
-        <p v-if="!success" class="act-buy-hint">{{ t('activation.buyHint') }}</p>
+        <a
+          v-if="!success"
+          href="https://placeholder.com/buy"
+          target="_blank"
+          class="act-buy-link"
+        >
+          {{ t('activation.buyHint') }}
+        </a>
 
         <div v-if="success" class="activation-success">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none"><path d="M20 6L9 17l-5-5" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/></svg>

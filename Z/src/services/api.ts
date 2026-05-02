@@ -15,13 +15,22 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-  const data = await res.json().catch(() => ({}));
+  const rawData = await res.json().catch(() => ({}));
 
+  // 1. 物理层校验 (HTTP Status)
   if (!res.ok) {
-    throw new Error(data?.message || data?.msg || `HTTP ${res.status}`);
+    throw new Error(rawData?.msg || rawData?.message || `HTTP ${res.status}`);
   }
 
-  return data as T;
+  // 2. 逻辑层校验 (Business Code)
+  // 假设 200, 0, 20000 均代表成功
+  const successCodes = [200, 0, '200', '0', '0000', '20000'];
+  if (rawData.code !== undefined && !successCodes.includes(rawData.code)) {
+    throw new Error(rawData.msg || rawData.message || '业务逻辑错误');
+  }
+
+  // 3. 自动解包 (如果有 data 字段则返回 data，否则返回原始数据)
+  return (rawData.data !== undefined ? rawData.data : rawData) as T;
 }
 
 export const api = {

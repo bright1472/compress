@@ -420,6 +420,22 @@
 .hdr-user-btn { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: var(--r-sm); border: 1px solid var(--c-border); background: transparent; color: var(--c-text-muted); cursor: pointer; transition: color 0.15s, border-color 0.15s; }
 .hdr-user-btn:hover { color: var(--c-text); border-color: var(--c-text-muted); }
 
+/* User Dropdown */
+.user-menu-wrapper { position: relative; }
+.user-dropdown { position: absolute; top: calc(100% + 10px); right: 0; width: 180px; background: var(--c-bg-surface); border: 1px solid var(--c-border-strong); border-radius: 12px; box-shadow: 0 16px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(255,255,255,0.05); padding: 8px; z-index: 100; backdrop-filter: blur(20px); }
+.user-info { padding: 8px 12px 10px; }
+.user-account { display: block; font-size: 0.72rem; font-weight: 600; color: var(--c-text-muted); overflow: hidden; text-overflow: ellipsis; }
+.dropdown-divider { height: 1px; background: var(--c-border); margin: 4px 0; opacity: 0.6; }
+.dropdown-item { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: none; background: transparent; border-radius: 8px; color: var(--c-text-secondary); font-size: 0.8rem; font-weight: 600; cursor: pointer; transition: all 0.15s; }
+.dropdown-item:hover { background: var(--c-bg-hover); color: var(--c-text-primary); }
+.dropdown-item.logout { color: #ef4444; }
+.dropdown-item.logout:hover { background: rgba(239,68,68,0.1); color: #ef4444; }
+
+/* Transitions */
+.fade-slide-enter-active { transition: all 0.2s ease-out; }
+.fade-slide-leave-active { transition: all 0.15s ease-in; }
+.fade-slide-enter-from, .fade-slide-leave-to { opacity: 0; transform: translateY(-8px); }
+
 /* Per-item cancel button in queue */
 .qi-btn.cancel { width: 24px; height: 24px; border-radius: 50%; color: var(--c-danger); background: rgba(239,68,68,0.12); border: 0.5px solid rgba(239,68,68,0.22); transition: all var(--dur-fast) var(--ease-spring); }
 .qi-btn.cancel:hover { background: var(--c-danger); color: #fff; border-color: var(--c-danger); transform: scale(1.1); }

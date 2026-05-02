@@ -40,8 +40,11 @@ watch(showLoggerEnabled, (v) => { localStorage.setItem(GLOBAL_KEY, JSON.stringif
 // ── Settings/Logger 面板 ──────────────────────────────────────────
 const showSettings = ref(false);
 const showLogger = ref(false);
+const showUserMenu = ref(false);
+
 const openSettings = () => { showSettings.value = true; };
 const openDiagnosticLogs = () => { logger.info('system', 'User opened diagnostic console'); showLogger.value = true; };
+const toggleUserMenu = (e: Event) => { e.stopPropagation(); showUserMenu.value = !showUserMenu.value; };
 
 // 模式切换时关闭当前设置面板，避免两个覆盖层重叠
 watch(mode, () => { showSettings.value = false; });
@@ -60,8 +63,9 @@ const imageBadge = computed(() => imageRunning.value ? (imageRef.value?.currentP
 
 // ── 全局事件 ──────────────────────────────────────────────────────
 const onKeydown = (e: KeyboardEvent) => {
-  if (e.key === 'Escape') { showSettings.value = false; showLogger.value = false; }
+  if (e.key === 'Escape') { showSettings.value = false; showLogger.value = false; showUserMenu.value = false; }
 };
+const onGlobalClick = () => { showUserMenu.value = false; };
 const handleBeforeUnload = (e: BeforeUnloadEvent) => {
   if (videoTotal.value > 0 || imageTotal.value > 0) {
     e.preventDefault();
@@ -71,11 +75,13 @@ const handleBeforeUnload = (e: BeforeUnloadEvent) => {
 
 onMounted(() => {
   document.addEventListener('keydown', onKeydown);
+  document.addEventListener('click', onGlobalClick);
   window.addEventListener('beforeunload', handleBeforeUnload);
   syncUsage();
 });
 onUnmounted(() => {
   document.removeEventListener('keydown', onKeydown);
+  document.removeEventListener('click', onGlobalClick);
   window.removeEventListener('beforeunload', handleBeforeUnload);
   router.terminate();
 });
@@ -158,15 +164,29 @@ onUnmounted(() => {
             v-if="!isSubscribed"
             class="hdr-usage-btn"
             :class="{ warn: usageCount >= usageLimit }"
-            :title="t('auth.upgradeHint')"
             @click="showActivationModal = true"
           >
-            {{ t('auth.usageDisplay', { n: usageCount, max: usageLimit }) }}
+            {{ t('auth.notActivated') || '未激活' }}
           </button>
           <span v-else class="hdr-subscribed-badge">{{ t('auth.subscribed') }}</span>
-          <button class="hdr-user-btn" :title="authUser?.account" @click="logout">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-          </button>
+
+          <div class="user-menu-wrapper">
+            <button class="hdr-user-btn" :title="authUser?.account" @click="toggleUserMenu">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="4" stroke="currentColor" stroke-width="1.8"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
+            </button>
+            <Transition name="fade-slide">
+              <div v-if="showUserMenu" class="user-dropdown">
+                <div class="user-info">
+                  <span class="user-account">{{ authUser?.account }}</span>
+                </div>
+                <div class="dropdown-divider"></div>
+                <button class="dropdown-item logout" @click="logout">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
+                  <span>{{ t('auth.logout') }}</span>
+                </button>
+              </div>
+            </Transition>
+          </div>
         </template>
       </div>
     </header>

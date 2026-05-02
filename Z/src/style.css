@@ -151,18 +151,22 @@ input, select { font-family: inherit; outline: none; }
 .auth-error { font-size: 0.73rem; color: #ef4444; margin: 0; padding: 0; }
 
 .auth-submit {
-  height: 40px;
-  border-radius: 8px;
+  width: 100%;
+  height: 44px;
+  border-radius: 12px;
   border: none;
   background: var(--c-accent);
   color: #fff;
-  font-size: 0.82rem; font-weight: 700;
+  font-size: 0.9rem; font-weight: 700;
+  letter-spacing: 0.12em;
   cursor: pointer;
   display: flex; align-items: center; justify-content: center; gap: 8px;
-  transition: opacity 0.15s;
+  transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1);
+  box-shadow: 0 8px 20px rgba(249,115,22,0.35);
+  margin-top: 4px;
 }
-.auth-submit:disabled { opacity: 0.5; cursor: not-allowed; }
-.auth-submit:not(:disabled):hover { opacity: 0.88; }
+.auth-submit:not(:disabled):hover { background: var(--c-accent-hover); transform: translateY(-2px); box-shadow: 0 12px 28px rgba(249,115,22,0.45); }
+.auth-submit:active { transform: translateY(0); box-shadow: 0 4px 10px rgba(249,115,22,0.3); }
 
 .auth-spinner {
   width: 14px; height: 14px;
@@ -278,8 +282,34 @@ input, select { font-family: inherit; outline: none; }
   color: var(--c-accent);
   letter-spacing: -0.01em;
 }
-.act-buy-hint {
-  font-size: 0.7rem; color: var(--c-text-muted);
-  text-align: center; margin: 0 0 14px;
-  line-height: 1.5;
+.act-status-badge {
+  font-size: 0.55rem; font-weight: 700;
+  padding: 1px 5px; border-radius: 4px;
+  background: var(--c-bg-elevated); color: var(--c-text-secondary);
+  border: 1px solid var(--c-border);
+  margin-left: 4px; opacity: 0.8;
 }
+.act-status-badge.pro {
+  background: var(--c-accent); color: #fff;
+  border-color: var(--c-accent); opacity: 1;
+}
+.act-plan-active {
+  border-color: var(--c-accent) !important;
+  background: var(--c-accent-subtle) !important;
+}
+.act-buy-link {
+  display: block;
+  font-size: 0.72rem; color: var(--c-accent);
+  text-align: center; margin: 0 0 16px;
+  line-height: 1.5;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.act-buy-link:hover { color: var(--c-accent-hover); text-decoration: underline; opacity: 0.9; }
+
+/* Usage Box inside Modal */
+.act-usage-box { margin-bottom: 8px; }
+.act-usage-label { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; font-weight: 700; color: var(--c-text-secondary); margin-bottom: 4px; }
+.act-usage-bar { height: 4px; background: var(--c-bg-elevated); border-radius: 2px; overflow: hidden; border: 1px solid var(--c-border); }
+.act-usage-fill { height: 100%; background: var(--c-accent); border-radius: 2px; transition: width 0.4s cubic-bezier(0.16, 1, 0.3, 1); }
