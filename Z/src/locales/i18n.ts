@@ -162,6 +162,15 @@ export const zh = {
     oneClick: '一键注册（自动生成账号）',
     orManual: '或手动填写',
     registerRetry: '注册失败，请稍后重试',
+    emailLabel: '联系邮箱',
+    emailPlaceholder: '输入邮箱接收账号凭证',
+    emailHint: '我们将账号密码发至该邮箱，防止丢失',
+    sendAndStart: '发送并进入系统',
+    emailRequired: '请输入正确的邮箱地址',
+    emailSettings: '邮箱设置',
+    emailUpdated: '邮箱更新成功',
+    enterNewEmail: '请输入新的联系邮箱',
+    noEmail: '未绑定邮箱',
   },
   activation: {
     title: '激活正式版',
@@ -185,6 +194,11 @@ export const zh = {
     proPrice: '正式版 · 全功能解锁',
     buyHint: '没有激活码？点我购买',
     currentStatus: '当前使用中',
+  },
+  common: {
+    confirm: '确定',
+    updateFailed: '更新失败',
+    save: '保存',
   },
 };
 
@@ -350,6 +364,15 @@ export const en = {
     oneClick: 'One-click register (auto-generate account)',
     orManual: 'Or fill in manually',
     registerRetry: 'Registration failed, please try again',
+    emailLabel: 'Email Address',
+    emailPlaceholder: 'Enter email to receive credentials',
+    emailHint: 'We will send your login info to this email',
+    sendAndStart: 'Send and Enter',
+    emailRequired: 'Please enter a valid email',
+    emailSettings: 'Email Settings',
+    emailUpdated: 'Email updated successfully',
+    enterNewEmail: 'Enter new email address',
+    noEmail: 'No email bound',
   },
   activation: {
     title: 'Activate Official Version',
@@ -373,6 +396,11 @@ export const en = {
     proPrice: 'Official · Full Access',
     buyHint: 'No code? Click here to buy.',
     currentStatus: 'CURRENT PLAN',
+  },
+  common: {
+    confirm: 'Confirm',
+    updateFailed: 'Update Failed',
+    save: 'Save',
   },
 };
 
@@ -406,3 +434,14 @@ export const t = computed<(key: string, args?: Record<string, any>) => string>((
     return res;
   };
 });
+
+/**
+ * 组合式 API 钩子，方便在组件内使用
+ */
+export function useI18n() {
+  return {
+    t: t.value,
+    locale: currentLocale,
+    setLocale
+  };
+}

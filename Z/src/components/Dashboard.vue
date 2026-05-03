@@ -1,29 +1,33 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, provide } from 'vue';
 import { EngineRouter } from '../engine/engine-router';
+import { api } from '../services/api';
 import VideoCompressor from './VideoCompressor.vue';
 import ImageCompressor from './ImageCompressor.vue';
 import LoggerConsole from './LoggerConsole.vue';
 import AuthModal from './AuthModal.vue';
 import ActivationModal from './ActivationModal.vue';
+import EmailUpdateModal from './EmailUpdateModal.vue';
 import { t, currentLocale, setLocale } from '../locales/i18n';
 import { logger } from '../engine/logger';
 import { mode, setMode } from '../composables/useModeToggle';
 import { isLoggedIn, authUser, logout } from '../composables/useAuth';
 import { usageCount, isSubscribed, usageLimit, syncUsage } from '../composables/useUsageLimit';
 
-// ── EngineRouter 单例，子组件通过 inject 共享 ────────────────────
+// ── EngineRouter 单例 ────────────────────
 const router = new EngineRouter();
 provide('engineRouter', router);
 
-// ── Auth / Usage modals ───────────────────────────────────────────
+// ── Modals ──────────────────────────────
 const showAuthModal = ref(false);
 const showActivationModal = ref(false);
+const showEmailModal = ref(false);
 const authModalFromGate = ref(false);
+
 provide('openAuthModal', (fromGate = false) => { authModalFromGate.value = fromGate; showAuthModal.value = true; });
 provide('openActivationModal', () => { showActivationModal.value = true; });
 
-// ── Theme ────────────────────────────────────────────────────────
+// ── Theme ───────────────────────────────
 const THEME_KEY = 'titan-theme';
 const savedTheme = localStorage.getItem(THEME_KEY);
 const isDark = ref(savedTheme ? savedTheme === 'dark' : true);
@@ -31,13 +35,12 @@ const applyTheme = () => document.documentElement.setAttribute('data-theme', isD
 const toggleTheme = () => { isDark.value = !isDark.value; };
 watch(isDark, (v) => { applyTheme(); localStorage.setItem(THEME_KEY, v ? 'dark' : 'light'); }, { immediate: true });
 
-// ── Logger 开关（全局）────────────────────────────────────────────
+// ── Settings/Logger ─────────────────────
 const GLOBAL_KEY = 'titan-global-settings';
 const _gs = (() => { try { return JSON.parse(localStorage.getItem(GLOBAL_KEY) ?? 'null'); } catch { return null; } })();
 const showLoggerEnabled = ref<boolean>(typeof _gs?.showLoggerEnabled === 'boolean' ? _gs.showLoggerEnabled : false);
 watch(showLoggerEnabled, (v) => { localStorage.setItem(GLOBAL_KEY, JSON.stringify({ showLoggerEnabled: v })); });
 
-// ── Settings/Logger 面板 ──────────────────────────────────────────
 const showSettings = ref(false);
 const showLogger = ref(false);
 const showUserMenu = ref(false);
@@ -45,11 +48,11 @@ const showUserMenu = ref(false);
 const openSettings = () => { showSettings.value = true; };
 const openDiagnosticLogs = () => { logger.info('system', 'User opened diagnostic console'); showLogger.value = true; };
 const toggleUserMenu = (e: Event) => { e.stopPropagation(); showUserMenu.value = !showUserMenu.value; };
+const handleUpdateEmail = () => { showEmailModal.value = true; };
 
-// 模式切换时关闭当前设置面板，避免两个覆盖层重叠
 watch(mode, () => { showSettings.value = false; });
 
-// ── 子组件引用：读取 isRunning / pendingCount / currentProcessing ─
+// ── Component Refs ──────────────────────
 const videoRef = ref<InstanceType<typeof VideoCompressor> | null>(null);
 const imageRef = ref<InstanceType<typeof ImageCompressor> | null>(null);
 
@@ -57,11 +60,10 @@ const videoRunning = computed(() => !!videoRef.value?.isRunning);
 const imageRunning = computed(() => !!imageRef.value?.isRunning);
 const videoTotal = computed(() => videoRef.value?.totalCount ?? 0);
 const imageTotal = computed(() => imageRef.value?.totalCount ?? 0);
-
 const videoBadge = computed(() => videoRunning.value ? (videoRef.value?.currentProcessing ? 1 : 0) : 0);
 const imageBadge = computed(() => imageRunning.value ? (imageRef.value?.currentProcessing ? 1 : 0) : 0);
 
-// ── 全局事件 ──────────────────────────────────────────────────────
+// ── Lifecycle ───────────────────────────
 const onKeydown = (e: KeyboardEvent) => {
   if (e.key === 'Escape') { showSettings.value = false; showLogger.value = false; showUserMenu.value = false; }
 };
@@ -77,7 +79,7 @@ onMounted(() => {
   document.addEventListener('keydown', onKeydown);
   document.addEventListener('click', onGlobalClick);
   window.addEventListener('beforeunload', handleBeforeUnload);
-  syncUsage();
+  if (isLoggedIn.value) syncUsage();
 });
 onUnmounted(() => {
   document.removeEventListener('keydown', onKeydown);
@@ -89,7 +91,6 @@ onUnmounted(() => {
 
 <template>
   <div class="app-shell">
-    <!-- ═══ HEADER ═══════════════════════════════════════════════ -->
     <header class="app-header">
       <div class="header-brand">
         <div class="brand-icon">
@@ -102,26 +103,13 @@ onUnmounted(() => {
       </div>
 
       <div class="header-right">
-        <!-- Mode toggle -->
         <div class="mode-toggle" role="tablist">
-          <button
-            class="mode-pill"
-            role="tab"
-            :aria-selected="mode === 'video'"
-            :class="{ active: mode === 'video' }"
-            @click="setMode('video')"
-          >
+          <button class="mode-pill" role="tab" :aria-selected="mode === 'video'" :class="{ active: mode === 'video' }" @click="setMode('video')">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><polygon points="23 7 16 12 23 17 23 7" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><rect x="1" y="5" width="15" height="14" rx="2" stroke="currentColor" stroke-width="2"/></svg>
             <span>{{ t('mode.video') }}</span>
             <span v-if="mode !== 'video' && videoBadge > 0" class="mode-badge">{{ videoBadge }}</span>
           </button>
-          <button
-            class="mode-pill"
-            role="tab"
-            :aria-selected="mode === 'image'"
-            :class="{ active: mode === 'image' }"
-            @click="setMode('image')"
-          >
+          <button class="mode-pill" role="tab" :aria-selected="mode === 'image'" :class="{ active: mode === 'image' }" @click="setMode('image')">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="9" r="2" stroke="currentColor" stroke-width="2"/><path d="M21 15l-5-5-10 10" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
             <span>{{ t('mode.image') }}</span>
             <span v-if="mode !== 'image' && imageBadge > 0" class="mode-badge">{{ imageBadge }}</span>
@@ -153,19 +141,12 @@ onUnmounted(() => {
 
         <div class="hdr-divider"></div>
 
-        <!-- 未登录 -->
         <button v-if="!isLoggedIn" class="hdr-auth-btn" @click="authModalFromGate = false; showAuthModal = true">
           {{ t('auth.login') }}
         </button>
 
-        <!-- 已登录 -->
         <template v-else>
-          <button
-            v-if="!isSubscribed"
-            class="hdr-usage-btn"
-            :class="{ warn: usageCount >= usageLimit }"
-            @click="showActivationModal = true"
-          >
+          <button v-if="!isSubscribed" class="hdr-usage-btn" :class="{ warn: usageCount >= usageLimit }" @click="showActivationModal = true">
             {{ t('auth.notActivated') || '未激活' }}
           </button>
           <span v-else class="hdr-subscribed-badge">{{ t('auth.subscribed') }}</span>
@@ -176,10 +157,15 @@ onUnmounted(() => {
             </button>
             <Transition name="fade-slide">
               <div v-if="showUserMenu" class="user-dropdown">
-                <div class="user-info">
-                  <span class="user-account">{{ authUser?.account }}</span>
-                </div>
+                <div class="user-info"><span class="user-account">{{ authUser?.account }}</span></div>
                 <div class="dropdown-divider"></div>
+                <button class="dropdown-item" @click="handleUpdateEmail">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M22 6l-10 7L2 6"/></svg>
+                  <div class="dropdown-col">
+                    <span>{{ t('auth.emailSettings') }}</span>
+                    <span class="dropdown-subtext">{{ authUser?.email || t('auth.noEmail') }}</span>
+                  </div>
+                </button>
                 <button class="dropdown-item logout" @click="logout">
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4M16 17l5-5-5-5M21 12H9"/></svg>
                   <span>{{ t('auth.logout') }}</span>
@@ -191,25 +177,14 @@ onUnmounted(() => {
       </div>
     </header>
 
-    <!-- ═══ BODY — 两个 compressor 始终挂载，仅用 v-show 切换 ═════ -->
-    <VideoCompressor
-      ref="videoRef"
-      v-show="mode === 'video'"
-      :show-settings="mode === 'video' && showSettings"
-      @update:show-settings="showSettings = $event"
-    />
-    <ImageCompressor
-      ref="imageRef"
-      v-show="mode === 'image'"
-      :show-settings="mode === 'image' && showSettings"
-      @update:show-settings="showSettings = $event"
-    />
+    <VideoCompressor ref="videoRef" v-show="mode === 'video'" :show-settings="mode === 'video' && showSettings" @update:show-settings="showSettings = $event" />
+    <ImageCompressor ref="imageRef" v-show="mode === 'image'" :show-settings="mode === 'image' && showSettings" @update:show-settings="showSettings = $event" />
 
     <LoggerConsole :show="showLogger" @close="showLogger = false" />
 
     <AuthModal v-if="showAuthModal" :limit-reached="authModalFromGate" @close="showAuthModal = false; authModalFromGate = false" />
     <ActivationModal v-if="showActivationModal" @close="showActivationModal = false" />
-
+    <EmailUpdateModal :show="showEmailModal" @close="showEmailModal = false" />
   </div>
 </template>
 

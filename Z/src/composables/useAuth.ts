@@ -5,13 +5,13 @@ const TOKEN_KEY = 'titan-token';
 const USER_KEY = 'titan-user';
 
 export const token = ref<string | null>(localStorage.getItem(TOKEN_KEY));
-export const authUser = ref<{ id: string; account: string } | null>(
+export const authUser = ref<{ id: string; account: string; email?: string } | null>(
   (() => { try { return JSON.parse(localStorage.getItem(USER_KEY) ?? 'null'); } catch { return null; } })(),
 );
 
 export const isLoggedIn = computed(() => !!token.value);
 
-function persist(t: string, u: { id: string; account: string }) {
+function persist(t: string, u: { id: string; account: string; email?: string }) {
   token.value = t;
   authUser.value = u;
   localStorage.setItem(TOKEN_KEY, t);
@@ -26,20 +26,29 @@ function clear() {
 }
 
 export async function login(account: string, password: string) {
-  const res = await api.post<{ token: string; account: string; _id?: string; id?: string }>(
+  const res = await api.post<{ token: string; account: string; email?: string; _id?: string; id?: string }>(
     '/authManager/login',
     { account, password },
   );
-  const id = (res as any).id || (res as any)._id || '';
-  persist(res.token, { id, account: res.account || account });
+  const id = res.id || res._id || '';
+  persist(res.token, { id, account: res.account || account, email: res.email });
 }
 
 export async function register(account: string, password: string) {
-  const res = await api.post<{ token: string; account: string }>(
+  const res = await api.post<{ token: string; account: string; email?: string; id?: string; _id?: string }>(
     '/compress/register',
     { account, password },
   );
-  persist(res.token, { id: '', account: res.account || account });
+  const id = res.id || res._id || '';
+  persist(res.token, { id, account: res.account || account, email: res.email });
+}
+
+export function updateUser(updates: Partial<{ id: string; account: string; email: string }>) {
+  if (authUser.value) {
+    const newUser = { ...authUser.value, ...updates };
+    authUser.value = newUser;
+    localStorage.setItem(USER_KEY, JSON.stringify(newUser));
+  }
 }
 
 export function logout() {

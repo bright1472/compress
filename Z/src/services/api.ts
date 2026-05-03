@@ -24,7 +24,7 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
   // 2. 逻辑层校验 (Business Code)
   // 假设 200, 0, 20000 均代表成功
-  const successCodes = [200, 0, '200', '0', '0000', '20000'];
+  const successCodes = [200, 1, '200', '1', '0000', '20000'];
   if (rawData.code !== undefined && !successCodes.includes(rawData.code)) {
     throw new Error(rawData.msg || rawData.message || '业务逻辑错误');
   }
