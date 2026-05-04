@@ -42,7 +42,7 @@ const isValidFile = (f: File) => VALID_VIDEO_TYPES.has(f.type) || VALID_VIDEO_EX
 // ── Settings（视频独有）──────────────────────────────────────────
 const SETTINGS_KEY = 'titan-video-settings';
 const SETTINGS_VIEW_KEY = 'titan-view-mode';
-const viewMode = ref<'list' | 'split'>((localStorage.getItem(SETTINGS_VIEW_KEY) as 'list' | 'split') || 'list');
+const viewMode = ref<'list' | 'split'>((localStorage.getItem(SETTINGS_VIEW_KEY) as 'list' | 'split') || 'split');
 watch(viewMode, (v) => localStorage.setItem(SETTINGS_VIEW_KEY, v));
 const _saved = (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null'); } catch { return null; } })();
 const VALID_CODECS = new Set(['libx264', 'libx265', 'av1']);
@@ -103,6 +103,7 @@ const previewError = ref(false);
 
 const processItem = async (item: QueueItem) => {
   stopRequested.value = false;
+  router.resetTerminated();
   if (!checkAndGate(openAuthModal, openActivationModal)) {
     throw new Error('QUOTA_EXCEEDED');
   }
@@ -214,7 +215,7 @@ watchEffect(() => {
   if (q.activeItem.value?.status === 'done') mobileTab.value = 'stage';
 });
 
-// ── Native Host（极速模式）────────────────────────────────────────
+// ── Native Host（保留接口）────────────────────────────────────────
 const nativeEngine = router.getNativeHostEngine();
 const nativeHostAvailable = ref(false);
 const nativeMode = ref(localStorage.getItem('titan-native-mode') === '1');
@@ -292,7 +293,7 @@ defineExpose({
         <span v-if="nativeProgressVal">
           ⚡ {{ nativeProgressVal.file }} · {{ nativeProgressVal.percent }}% · {{ nativeProgressVal.fps }} fps · ETA {{ nativeProgressVal.eta }}
         </span>
-        <span v-else>⚡ 极速模式压缩中…</span>
+        <span v-else>正在进行本地高性能压缩…</span>
       </div>
     </Transition>
 
@@ -306,7 +307,7 @@ defineExpose({
               <span class="qh-count">{{ q.doneCount.value }}/{{ q.totalCount.value }}</span>
             </div>
             <div class="qh-right" style="display: flex; align-items: center; gap: 6px; position: relative;">
-              <span v-if="tierLabel" class="qh-tier-pill" :style="{ color: tierLabel.color, borderColor: tierLabel.color + '44' }">{{ tierLabel.text }}</span>
+              <span v-if="tierLabel" class="qh-tier-pill" :style="{ color: tierLabel.color, borderColor: tierLabel.color + '44' }" :title="currentTier !== null && currentTier >= 3 ? t('process.cpuModeTooltip') : ''">{{ tierLabel.text }}</span>
               <span v-if="q.doneCount.value > 0" class="qh-saved-pill">↓ {{ q.totalSavedMB.value.toFixed(1) }} MB</span>
               <button class="view-toggle-btn" @click="viewMode = viewMode === 'list' ? 'split' : 'list'" :title="viewMode === 'list' ? '切换至双屏对比' : '切换至纯净队列'">
                 <svg v-if="viewMode === 'list'" width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/><line x1="12" y1="3" x2="12" y2="21" stroke="currentColor" stroke-width="2"/></svg>
@@ -384,7 +385,7 @@ defineExpose({
         </div>
 
         <div class="sb-footer">
-          <button class="add-files-btn" @click="fileInputRef?.click()">
+          <button class="add-files-btn" @click="fileInputRef?.click()" :disabled="q.isRunning.value">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none"><line x1="12" y1="5" x2="12" y2="19" stroke="currentColor" stroke-width="2" stroke-linecap="round"/><line x1="5" y1="12" x2="19" y2="12" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             {{ t('queue.addFiles') }}
           </button>
@@ -404,8 +405,8 @@ defineExpose({
 
       <!-- Main stage -->
       <main class="stage" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
-        <div v-if="q.totalCount.value === 0" class="drop-zone" :class="{ dragging: isDragging }" @click="fileInputRef?.click()">
-          <div class="drop-content">
+        <div v-if="q.totalCount.value === 0" class="drop-zone" :class="{ dragging: isDragging }">
+          <div class="drop-content" @click="fileInputRef?.click()">
             <div class="drop-icon-wrap">
               <div class="drop-ring-outer"></div><div class="drop-ring"></div>
               <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
@@ -418,7 +419,7 @@ defineExpose({
             <div class="drop-formats">
               <span v-for="f in ['MP4','MOV','MKV','AVI','WebM','FLV','WMV']" :key="f" class="fmt-tag">{{ f }}</span>
             </div>
-            <div class="drop-features">
+            <div class="drop-features" @click.stop>
               <div class="feat-card">
                 <div class="feat-icon-sm gpu"><svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/></svg></div>
                 <div class="feat-txt"><div class="feat-title">{{ t('features.gpu.title') }}</div><div class="feat-desc">{{ t('features.gpu.desc') }}</div></div>

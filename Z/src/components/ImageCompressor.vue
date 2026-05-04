@@ -38,7 +38,7 @@ const isValidFile = (f: File) => VALID_IMAGE_TYPES.has(f.type) || VALID_IMAGE_EX
 // ── Settings（图片独有）──────────────────────────────────────────
 const SETTINGS_KEY = 'titan-image-settings';
 const SETTINGS_VIEW_KEY = 'titan-view-mode';
-const viewMode = ref<'list' | 'split'>((localStorage.getItem(SETTINGS_VIEW_KEY) as 'list' | 'split') || 'list');
+const viewMode = ref<'list' | 'split'>((localStorage.getItem(SETTINGS_VIEW_KEY) as 'list' | 'split') || 'split');
 watch(viewMode, (v) => localStorage.setItem(SETTINGS_VIEW_KEY, v));
 const _saved = (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null'); } catch { return null; } })();
 const VALID_FMTS: ImageFmt[] = ['original','png','jpg','webp','avif'];
@@ -294,8 +294,8 @@ defineExpose({
       </aside>
 
       <main class="stage" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
-        <div v-if="q.totalCount.value === 0" class="drop-zone" :class="{ dragging: isDragging }" @click="fileInputRef?.click()">
-          <div class="drop-content">
+        <div v-if="q.totalCount.value === 0" class="drop-zone" :class="{ dragging: isDragging }">
+          <div class="drop-content" @click="fileInputRef?.click()">
             <div class="drop-icon-wrap">
               <div class="drop-ring-outer"></div><div class="drop-ring"></div>
               <svg width="34" height="34" viewBox="0 0 34 34" fill="none">
@@ -345,12 +345,14 @@ defineExpose({
         </div>
 
         <div v-if="q.activeItem.value && q.activeItem.value.status === 'done'" class="result-stage">
-          <ImageComparison
-            :original-url="q.activeItem.value.originalUrl"
-            :compressed-url="q.activeItem.value.compressedUrl ?? ''"
-            :original-label="`ORIGINAL · ${fileSizeStr(q.activeItem.value.file.size)}`"
-            :compressed-label="`COMPRESSED · ${fileSizeStr(q.activeItem.value.compressedSize)} · ↓${compressionRatio(q.activeItem.value)}%`"
-          />
+          <div class="slider-wrap">
+            <ImageComparison
+              :original-url="q.activeItem.value.originalUrl"
+              :compressed-url="q.activeItem.value.compressedUrl ?? ''"
+              :original-label="`ORIGINAL · ${fileSizeStr(q.activeItem.value.file.size)}`"
+              :compressed-label="`COMPRESSED · ${fileSizeStr(q.activeItem.value.compressedSize)} · ↓${compressionRatio(q.activeItem.value)}%`"
+            />
+          </div>
         </div>
 
         <div v-if="q.activeItem.value && q.activeItem.value.status === 'error'" class="error-stage">

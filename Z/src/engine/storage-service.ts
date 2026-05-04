@@ -1,6 +1,6 @@
 /**
  * src/engine/storage-service.ts
- * 2026 Elite Storage Service - 处理 10GB+ 级超大视频的磁盘缓冲区
+ * 2026 Elite Storage Service - 处理大规模媒体数据的磁盘缓冲区
  * 基于 OPFS (Origin Private File System) 实现
  * 符合 Silicon Valley 极简与健壮性标准
  */

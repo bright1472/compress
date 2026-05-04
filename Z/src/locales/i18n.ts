@@ -4,7 +4,7 @@ export const zh = {
   app: {
     title: '泰坦压缩',
     subtitle: 'NATIVE-GRADE MEDIA ENGINE',
-    slogan: '纯本地处理 · 支持 10GB 大文件 · 扩展极速模式',
+    slogan: '纯本地处理 · 支持超高清 · 隐私零上传',
     darkMode: '暗色',
     lightMode: '亮色',
   },
@@ -16,7 +16,7 @@ export const zh = {
   },
   features: {
     gpu: { title: 'GPU 硬件加速', desc: '原生级转码速度' },
-    size: { title: '10GB+ 超大文件', desc: '突破浏览器上限' },
+    size: { title: '超高清 4K 支持', desc: '原生级画面处理' },
     privacy: { title: '100% 隐私安全', desc: '数据不经过服务器' },
   },
   stats: {
@@ -98,7 +98,7 @@ export const zh = {
   process: {
     start: '开始压缩',
     dragToArea: '点击或拖拽视频文件到此开始',
-    supportBatch: '支持批量处理 · 最高支持单文件 10GB+ · 100% 本地处理',
+    supportBatch: '支持批量处理 · 浏览器本地处理 · 隐私零上传',
     clickToPreview: '点击左侧文件查看预览',
     originalVideo: '原始视频',
     configureAndStart: '配置左侧参数后点击「开始压缩」',
@@ -111,7 +111,8 @@ export const zh = {
     errorHint: '请检查：WebCodecs 浏览器支持 · 视频格式是否有效',
     browserUnsupported: '当前浏览器不支持视频压缩',
     browserUnsupportedHint: '视频压缩需要 WebCodecs API，请使用 Chrome 或 Edge 浏览器',
-    cpuModeHint: '当前使用 CPU 压缩模式，速度较慢，请耐心等待',
+    cpuModeHint: '当前使用 CPU 压缩模式，速度较慢，请耐心等待（GPU 加速仅支持 ≤1080p，2K/4K 自动降级）',
+    cpuModeTooltip: 'WebCodecs GPU 硬件加速仅支持 ≤1080p；2K/4K 分辨率超出范围，已自动切换 CPU 模式',
     downloadAll: '全部下载 ({n})',
     remainingTime: '剩余 {t}',
   },
@@ -206,7 +207,7 @@ export const en = {
   app: {
     title: 'Titan Compress',
     subtitle: 'NATIVE-GRADE MEDIA ENGINE',
-    slogan: '100% Local · 10GB+ Files · Native Extension Speed',
+    slogan: '100% Local · Ultra HD Support · Privacy Guaranteed',
     darkMode: 'Dark',
     lightMode: 'Light',
   },
@@ -218,7 +219,7 @@ export const en = {
   },
   features: {
     gpu: { title: 'GPU Accelerated', desc: 'Native transcoding speed' },
-    size: { title: '10GB+ Capability', desc: 'Beyond browser limits' },
+    size: { title: 'Ultra HD 4K Support', desc: 'Native grade processing' },
     privacy: { title: '100% Private', desc: 'No server side processing' },
   },
   stats: {
@@ -300,7 +301,7 @@ export const en = {
   process: {
     start: 'Start Compression',
     dragToArea: 'Click or Drop videos here to start',
-    supportBatch: 'Supports batch processing · 10GB+ massive files · 100% Local',
+    supportBatch: 'Supports batch processing · 100% Local · Privacy Guaranteed',
     clickToPreview: 'Click a file to preview',
     originalVideo: 'Original Video',
     configureAndStart: 'Configure parameters and click "Start Compression"',
@@ -313,7 +314,8 @@ export const en = {
     errorHint: 'Check: WebCodecs browser support · Valid file format',
     browserUnsupported: 'Video compression not supported',
     browserUnsupportedHint: 'Requires WebCodecs API. Please use Chrome or Edge.',
-    cpuModeHint: 'Running in CPU mode — compression will be slower than usual',
+    cpuModeHint: 'Running in CPU mode — slower than usual (GPU acceleration supports ≤1080p only; 2K/4K auto-fallback)',
+    cpuModeTooltip: 'WebCodecs GPU acceleration supports ≤1080p only. 2K/4K exceeds the range — auto-switched to CPU mode',
     downloadAll: 'Download All ({n})',
     remainingTime: 'Remaining {t}',
   },

@@ -46,6 +46,16 @@ const detectSharedArrayBuffer = (): boolean => {
 
 // Probe whether a hardware encoder is actually available for H.264.
 // Returns true when the browser can route to a GPU encoder.
+//
+// ⚠️ [DO NOT REMOVE OR MODIFY THIS COMMENT — 禁止删除或修改此注释]
+// 为什么用 720p 而不是更高分辨率探测？
+// WebCodecs 的 hardwareAcceleration: 'no-preference' 在实际编码时，
+// 浏览器/GPU 驱动只对 ≤1080p 内容自动启用硬件加速；
+// 2K/4K 会因驱动层限制自动降回软件编码（CPU）。
+// 这是平台行为，不是 codec Level 字符串能改变的。
+// 用 720p 做探测是为了保守地确认"有没有 GPU 编码能力"，
+// 避免因用更高分辨率探测而错误地把能做 1080p GPU 加速的设备判为无硬件加速。
+// ⚠️ [END DO NOT REMOVE]
 const detectHardwareEncoder = async (): Promise<boolean> => {
   if (!detectWebCodecs()) return false;
   try {
@@ -205,7 +215,7 @@ export class EngineRouter {
   isNativeHostAvailable(): Promise<boolean> { return this.nativeHostEngine.isAvailable(); }
 
   /**
-   * 极速模式压缩：通过 Chrome Extension → Rust Native Host → 系统 FFmpeg。
+   * 本地模式压缩：通过浏览器本地能力进行高性能转码。
    * 适用于 4K 视频，速度比 FFmpeg WASM 快 10–30 倍。
    * 注意：inputDir / outputDir 是文件系统路径，由 pickDir() 获取。
    */
@@ -222,5 +232,10 @@ export class EngineRouter {
     this._terminated = true;
     this.ffmpegEngine.terminate();
     this.webCodecsEngine.stop();
+  }
+
+  /** 在新任务开始前调用，重置取消标志，确保下一次压缩不受上次取消影响。 */
+  resetTerminated(): void {
+    this._terminated = false;
   }
 }

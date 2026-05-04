@@ -121,10 +121,10 @@
 .btn-clear:hover { border-color: var(--c-danger); color: var(--c-danger); background: var(--c-danger-subtle); }
 
 /* ── Stage ──────────────────────────────────────────────────────── */
-.stage { flex: 1; display: flex; align-items: center; justify-content: center; position: relative; overflow: hidden; background: var(--c-bg-base); background-image: radial-gradient(circle at center, rgba(249,115,22,0.06) 0%, transparent 70%), radial-gradient(circle, rgba(255,255,255,0.02) 1px, transparent 1px); background-size: 100% 100%, 32px 32px; }
+.stage { flex: 1; display: flex; flex-direction: column; align-items: stretch; justify-content: stretch; position: relative; overflow: hidden; background: var(--c-bg-base); background-image: radial-gradient(circle at center, rgba(249,115,22,0.06) 0%, transparent 70%), radial-gradient(circle, rgba(255,255,255,0.02) 1px, transparent 1px); background-size: 100% 100%, 32px 32px; }
 
 /* Drop Zone — Light-Focused (Refined) */
-.drop-zone { flex: 1; display: flex; align-items: center; justify-content: center; cursor: pointer; position: relative; overflow: visible; background: transparent; transition: all 0.4s var(--ease-out); border: none; }
+.drop-zone { flex: 1; display: flex; align-items: center; justify-content: center; cursor: default; position: relative; overflow: visible; background: transparent; transition: all 0.4s var(--ease-out); border: none; }
 
 /* Central high-light glow (Round & Unclipped) */
 .drop-zone::before { content: ''; position: absolute; left: 50%; top: 40%; transform: translate(-50%, -50%); width: 450px; height: 450px; background: radial-gradient(circle, rgba(249,115,22,0.14) 0%, rgba(249,115,22,0.04) 50%, transparent 75%); pointer-events: none; opacity: 0.7; transition: all 0.6s var(--ease-out); filter: blur(35px); z-index: 0; }
@@ -134,19 +134,21 @@
 /* Dragging state: pure light expansion */
 .drop-zone.dragging::before { width: 1000px; height: 1000px; opacity: 1; background: radial-gradient(circle, rgba(249,115,22,0.25) 0%, rgba(249,115,22,0.12) 50%, transparent 70%); animation: dz-light-pulse 2s ease-in-out infinite; }
 
-.drop-content { display: flex; flex-direction: column; align-items: center; gap: var(--sp-xl); text-align: center; padding: var(--sp-3xl); pointer-events: none; position: relative; z-index: 1; }
-.drop-zone .btn-ghost { pointer-events: all; }
-.drop-icon-wrap { position: relative; width: 132px; height: 132px; display: flex; align-items: center; justify-content: center; color: var(--c-accent); margin-bottom: 10px; }
+.drop-content { display: flex; flex-direction: column; align-items: center; gap: var(--sp-xl); text-align: center; padding: var(--sp-3xl); pointer-events: auto; cursor: pointer; position: relative; z-index: 1; }
+.drop-icon-wrap { position: relative; width: 132px; height: 132px; display: flex; align-items: center; justify-content: center; color: var(--c-accent); margin-bottom: 10px; overflow: hidden; border-radius: 50%; }
+.drop-icon-wrap::after { content: ''; position: absolute; inset: 0; background: linear-gradient(90deg, transparent 30%, rgba(255,255,255,0.08) 47%, rgba(255,255,255,0.22) 50%, rgba(255,255,255,0.08) 53%, transparent 70%); background-size: 400% 100%; background-position: 100% center; animation: text-shimmer 5s ease-in-out infinite; pointer-events: none; z-index: 1; }
+.drop-icon-wrap svg { transition: transform 0.35s var(--ease-spring); }
+.drop-zone:hover .drop-icon-wrap svg { transform: scale(1.08); }
 .drop-ring-outer { display: none; }
-.drop-ring { position: absolute; inset: 0; border-radius: 50%; background: rgba(249,115,22,0.06); box-shadow: 0 0 20px rgba(249,115,22,0.08); border: none; animation: pulse-glow 3s ease-in-out infinite; }
-.drop-zone:hover .drop-ring { background: rgba(249,115,22,0.12); box-shadow: 0 0 40px rgba(249,115,22,0.2); }
-.drop-title { font-family: 'Space Grotesk', sans-serif; font-size: 2.4rem; font-weight: 700; letter-spacing: -0.04em; color: var(--c-text-primary); line-height: 1.1; }
+.drop-ring { position: absolute; inset: 0; border-radius: 50%; background: none; border: 1px solid rgba(249,115,22,0.22); transition: border-color 0.4s var(--ease-out); }
+.drop-zone:hover .drop-ring { border-color: rgba(249,115,22,0.58); }
+.drop-title { font-family: 'Space Grotesk', sans-serif; font-size: 2.4rem; font-weight: 700; letter-spacing: -0.04em; line-height: 1.1; background: linear-gradient(90deg, rgba(255,255,255,0.48) 0%, rgba(255,255,255,0.48) 35%, rgba(255,255,255,0.82) 44%, rgba(255,255,255,1) 50%, rgba(255,255,255,0.82) 56%, rgba(255,255,255,0.48) 65%, rgba(255,255,255,0.48) 100%); background-size: 400% 100%; background-position: 100% center; -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; animation: text-shimmer 5s ease-in-out infinite; }
 .drop-sub { font-size: 0.95rem; color: var(--c-text-secondary); max-width: 520px; line-height: 1.6; }
 .drop-formats { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; margin-bottom: var(--sp-md); }
 .fmt-tag { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; font-weight: 700; padding: 5px 14px; border-radius: 8px; background: var(--c-bg-elevated); border: none; color: var(--c-text-muted); letter-spacing: 0.05em; transition: all var(--dur-fast); }
 .drop-zone:hover .fmt-tag { background: var(--c-accent-subtle); color: var(--c-text-accent); }
 
-.drop-features { display: flex; align-items: center; gap: 32px; margin-top: var(--sp-lg); padding: 20px 48px; background: var(--c-bg-surface); backdrop-filter: blur(30px); border: none; border-radius: 60px; box-shadow: 0 20px 60px rgba(0,0,0,0.12); }
+.drop-features { display: flex; align-items: center; gap: 32px; margin-top: var(--sp-lg); padding: 14px 32px; background: var(--c-bg-surface); border: 1px solid var(--c-border); border-radius: 16px; cursor: default; }
 .feat-card { display: flex; align-items: center; gap: 14px; text-align: left; }
 .feat-icon-sm { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; background: var(--c-bg-elevated); border: none; }
 .feat-icon-sm.gpu { color: #f59e0b; background: rgba(245,158,11,0.08); border-color: rgba(245,158,11,0.2); }
@@ -205,8 +207,8 @@
 .mc-unit { font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; color: var(--c-text-muted); font-weight: 600; letter-spacing: 0.08em; }
 
 /* Result Stage */
-.result-stage { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
-.slider-wrap { flex: 1; min-height: 0; overflow: hidden; }
+.result-stage { flex: 1; width: 100%; height: 100%; display: flex; flex-direction: column; overflow: hidden; }
+.slider-wrap { flex: 1; min-height: 0; display: flex; flex-direction: column; align-items: stretch; overflow: hidden; }
 
 /* Error Stage */
 .error-stage { flex: 1; display: flex; align-items: center; justify-content: center; }
@@ -328,7 +330,7 @@
 @keyframes shine { 0% { transform: translateX(-100%); } 100% { transform: translateX(100%); } }
 @keyframes slide-up { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 @keyframes dz-breathe { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
-@keyframes pulse-glow { 0%, 100% { transform: scale(1); opacity: 0.8; box-shadow: 0 0 20px rgba(249,115,22,0.1); } 50% { transform: scale(1.05); opacity: 1; box-shadow: 0 0 40px rgba(249,115,22,0.25); } }
+@keyframes text-shimmer { 0%, 20% { background-position: 100% center; } 60%, 100% { background-position: 0% center; } }
 @keyframes dz-light-pulse { 0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.8; } 50% { transform: translate(-50%, -50%) scale(1.1); opacity: 1; } }
 
 /* ── Responsive ─────────────────────────────────────────────────── */

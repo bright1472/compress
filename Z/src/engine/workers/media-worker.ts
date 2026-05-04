@@ -134,7 +134,6 @@ async function runPipeline({ file, config, outputHandle }: any) {
       keyFrameInterval: 5,
       hardwareAcceleration: 'no-preference',
     },
-    audio: { discard: true },
   });
   console.log(`⏱️ [Perf] Conversion init: ${((performance.now() - t2) / 1000).toFixed(2)}s`);
 
