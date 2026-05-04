@@ -23,6 +23,8 @@ export const zh = {
     files: '文件',
     done: '已完成',
     saved: '节省',
+    globalSaved: '全站已累计节省',
+    globalTotal: '已处理 {n} 个文件',
   },
   queue: {
     title: '文件队列',
@@ -226,6 +228,8 @@ export const en = {
     files: 'FILES',
     done: 'DONE',
     saved: 'MB SAVED',
+    globalSaved: 'Total Site Savings',
+    globalTotal: '{n} Files Processed',
   },
   queue: {
     title: 'File Queue',

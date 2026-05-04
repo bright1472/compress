@@ -312,10 +312,10 @@ defineExpose({
             <div v-if="globalTotalFiles > 0" class="global-stats-bar">
               <span class="gs-item">
                 <svg width="11" height="11" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/></svg>
-                累计节省 <strong>{{ formatBytes(globalSavedBytes) }}</strong>
+                {{ t('stats.globalSaved') }} <strong>{{ formatBytes(globalSavedBytes) }}</strong>
               </span>
               <span class="gs-sep">·</span>
-              <span class="gs-item">共 <strong>{{ globalTotalFiles.toLocaleString() }}</strong> 个文件</span>
+              <span class="gs-item">{{ t('stats.globalTotal', { n: globalTotalFiles.toLocaleString() }) }}</span>
             </div>
           </div>
         </div>
