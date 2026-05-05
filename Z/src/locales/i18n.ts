@@ -413,13 +413,13 @@ export const en = {
 
 export type LocaleInfo = 'en' | 'zh';
 
-const THEME_KEY = 'titan-locale';
-const savedLocale = localStorage.getItem(THEME_KEY) as LocaleInfo;
+const LOCALE_KEY = 'titan-locale';
+const savedLocale = localStorage.getItem(LOCALE_KEY) as LocaleInfo;
 export const currentLocale = ref<LocaleInfo>(savedLocale || 'zh');
 
 export const setLocale = (loc: LocaleInfo) => {
   currentLocale.value = loc;
-  localStorage.setItem(THEME_KEY, loc);
+  localStorage.setItem(LOCALE_KEY, loc);
 };
 
 export const t = computed<(key: string, args?: Record<string, any>) => string>(() => {

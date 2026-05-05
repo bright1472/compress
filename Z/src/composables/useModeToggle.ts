@@ -2,12 +2,20 @@ import { ref, watch } from 'vue';
 
 export type CompressMode = 'video' | 'image';
 
-const MODE_KEY = 'titan-mode';
-const saved = localStorage.getItem(MODE_KEY);
-const initial: CompressMode = saved === 'image' ? 'image' : 'video';
+const MODE_STORAGE_KEY = 'titan-mode';
 
-export const mode = ref<CompressMode>(initial);
+const getInitialMode = (): CompressMode => {
+  const saved = localStorage.getItem(MODE_STORAGE_KEY);
+  return saved === 'image' ? 'image' : 'video';
+};
 
-watch(mode, (v) => { localStorage.setItem(MODE_KEY, v); });
+export const mode = ref<CompressMode>(getInitialMode());
 
-export const setMode = (m: CompressMode) => { mode.value = m; };
+// 使用 watch 确保任何对 mode 的修改都能持久化
+watch(mode, (newMode) => {
+  localStorage.setItem(MODE_STORAGE_KEY, newMode);
+}, { immediate: true });
+
+export const setMode = (m: CompressMode) => {
+  mode.value = m;
+};

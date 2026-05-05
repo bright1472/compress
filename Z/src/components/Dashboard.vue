@@ -28,12 +28,12 @@ provide('openAuthModal', (fromGate = false) => { authModalFromGate.value = fromG
 provide('openActivationModal', () => { showActivationModal.value = true; });
 
 // ── Theme ───────────────────────────────
-const THEME_KEY = 'titan-theme';
-const savedTheme = localStorage.getItem(THEME_KEY);
+const THEME_STORAGE_KEY = 'titan-theme';
+const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
 const isDark = ref(savedTheme ? savedTheme === 'dark' : true);
 const applyTheme = () => document.documentElement.setAttribute('data-theme', isDark.value ? 'dark' : 'light');
 const toggleTheme = () => { isDark.value = !isDark.value; };
-watch(isDark, (v) => { applyTheme(); localStorage.setItem(THEME_KEY, v ? 'dark' : 'light'); }, { immediate: true });
+watch(isDark, (v) => { applyTheme(); localStorage.setItem(THEME_STORAGE_KEY, v ? 'dark' : 'light'); }, { immediate: true });
 
 // ── Settings/Logger ─────────────────────
 const GLOBAL_KEY = 'titan-global-settings';
