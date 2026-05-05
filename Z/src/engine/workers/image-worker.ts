@@ -21,7 +21,8 @@ import UPNG from 'upng-js';
 import mozjpegWasmUrl from '@jsquash/jpeg/codec/enc/mozjpeg_enc.wasm?url';
 import webpWasmUrl from '@jsquash/webp/codec/enc/webp_enc.wasm?url';
 import webpSimdWasmUrl from '@jsquash/webp/codec/enc/webp_enc_simd.wasm?url';
-import oxipngWasmUrl from '@jsquash/oxipng/codec/pkg/squoosh_oxipng_bg.wasm?url';
+import oxipngWasmUrlSt from '@jsquash/oxipng/codec/pkg/squoosh_oxipng_bg.wasm?url';
+import oxipngWasmUrlMt from '@jsquash/oxipng/codec/pkg-parallel/squoosh_oxipng_bg.wasm?url';
 import imagequantInit from '@panda-ai/imagequant';
 import { quantize_image } from '@panda-ai/imagequant';
 import imagequantWasmUrl from '@panda-ai/imagequant/imagequant_bg.wasm?url';
@@ -33,6 +34,7 @@ export interface ImageCompressionOptions {
   outputFormat: ImageOutputFormat;
   quality: number;
 }
+
 
 // ── 类型 ──────────────────────────────────────────────────────────────
 
@@ -161,9 +163,17 @@ const getIq = (): Promise<boolean> => (_iqPromise ??= _initIq());
 async function _initOxipng(): Promise<OxipngOptimise | null> {
   try {
     const { default: optimise, init } = await import('@jsquash/oxipng/optimise');
-    await init(oxipngWasmUrl);
+    const { threads } = await import('wasm-feature-detect');
+    // @jsquash/oxipng init 在 Worker + 线程支持时走 MT 分支，需要匹配的 MT wasm；否则用 ST
+    // typeof 守卫规避 TS 编译时找不到 WorkerGlobalScope 的问题
+    const isWorker = typeof (globalThis as { WorkerGlobalScope?: unknown }).WorkerGlobalScope !== 'undefined'
+      && self instanceof (globalThis as unknown as { WorkerGlobalScope: { new (): unknown } }).WorkerGlobalScope;
+    const useMt = isWorker && (navigator?.hardwareConcurrency ?? 0) > 1 && (await threads());
+    await init(useMt ? oxipngWasmUrlMt : oxipngWasmUrlSt);
     return (buf: ArrayBuffer) => optimise(buf, { level: 6, optimiseAlpha: true });
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 const getOxipng = (): Promise<OxipngOptimise | null> => (_oxipngPromise ??= _initOxipng());
 
@@ -268,21 +278,161 @@ function _kmeansRefine(
   }
 }
 
+// ── 智能模式辅助：色相空间分析 ─────────────────────────────────────
+function _rgbToHsv(r: number, g: number, b: number): { h: number; s: number; v: number } {
+  const rN = r / 255, gN = g / 255, bN = b / 255;
+  const max = Math.max(rN, gN, bN);
+  const min = Math.min(rN, gN, bN);
+  const d = max - min;
+  let h = 0;
+  if (d > 0) {
+    if (max === rN) h = ((gN - bN) / d) % 6;
+    else if (max === gN) h = (bN - rN) / d + 2;
+    else h = (rN - gN) / d + 4;
+    h *= 60;
+    if (h < 0) h += 360;
+  }
+  return { h, s: max === 0 ? 0 : d / max, v: max };
+}
+
+/**
+ * 检测 imagequant 给的 palette 对原图饱和色域的覆盖度。
+ * 把 H 0-360° 切成 12 个 bin（每 30°），找出"原图大量出现的高饱和色相 bin"（重要 bin），
+ * 检查该 bin 在 palette 中是否有对应的高饱和代表色。
+ *
+ * 任意一个重要 bin 在 palette 中无高饱和覆盖 → 量化会把该色相像素映射到错色相（饱和色变灰），返回 false。
+ *
+ * 用于在 imagequant 量化后判断结果是否会色彩失真。失真则上层应回退 True Color。
+ */
+function _paletteCoverageOk(
+  data: Uint8ClampedArray,
+  palette: Uint8Array,
+  width: number,
+  height: number,
+): boolean {
+  const BIN_COUNT = 12;
+  const SAT_THRESHOLD = 0.40;        // 高饱和门槛
+  const IMPORTANT_PX_RATIO = 0.005;  // 重要 bin：占总像素 0.5% 以上
+
+  const totalPx = width * height;
+  const importantThreshold = totalPx * IMPORTANT_PX_RATIO;
+
+  // 原图：每个色相 bin 的高饱和像素数
+  const pixelBins = new Uint32Array(BIN_COUNT);
+  for (let i = 0; i < totalPx; i++) {
+    const { h, s } = _rgbToHsv(data[i * 4], data[i * 4 + 1], data[i * 4 + 2]);
+    if (s >= SAT_THRESHOLD) pixelBins[Math.min(BIN_COUNT - 1, Math.floor(h / 30))]++;
+  }
+
+  // palette：每个色相 bin 的高饱和色数
+  const paletteBins = new Uint32Array(BIN_COUNT);
+  const paletteN = palette.length / 4;
+  for (let i = 0; i < paletteN; i++) {
+    const { h, s } = _rgbToHsv(palette[i * 4], palette[i * 4 + 1], palette[i * 4 + 2]);
+    if (s >= SAT_THRESHOLD) paletteBins[Math.min(BIN_COUNT - 1, Math.floor(h / 30))]++;
+  }
+
+  // 任意重要 bin 在 palette 中无高饱和色覆盖 → 失真风险高
+  for (let i = 0; i < BIN_COUNT; i++) {
+    if (pixelBins[i] > importantThreshold && paletteBins[i] === 0) return false;
+  }
+  return true;
+}
+
+type IqEncodeResult =
+  | { kind: 'ok'; encoded: ArrayBuffer }
+  | { kind: 'lowCoverage' }       // imagequant 量化色域覆盖差，应回退 True Color
+  | { kind: 'panic' };             // imagequant wasm 内部 trap，应回退 _ditheredEncode
+
 async function _iqEncode(
   imageData: ImageData,
   width: number,
   height: number,
   numColors: number,
-): Promise<ArrayBuffer | null> {
+): Promise<IqEncodeResult> {
+  let result: { palette: Uint8Array; indices: Uint8Array };
   try {
     const pixels = new Uint8Array(imageData.data.buffer, imageData.data.byteOffset, imageData.data.byteLength);
-    const result = quantize_image(pixels, width, height, numColors) as unknown as {
-      palette: Uint8Array; indices: Uint8Array;
-    };
-    const pal = result.palette.slice();
-    const idx = result.indices.slice();
-    return await _encodePng8(pal, idx, width, height);
-  } catch { return null; }
+    result = quantize_image(pixels, width, height, numColors) as unknown as typeof result;
+  } catch {
+    return { kind: 'panic' };
+  }
+  const pal = result.palette.slice();
+  // 智能色域覆盖度检测，避免饱和少数色被量化成灰白
+  if (!_paletteCoverageOk(imageData.data, pal, width, height)) {
+    return { kind: 'lowCoverage' };
+  }
+  // 用原图 + imagequant 的 palette 做 Floyd-Steinberg dithering（替代 imagequant 的硬映射 indices）
+  const idx = _floydSteinbergRemap(imageData.data, pal, width, height);
+  const encoded = await _encodePng8(pal, idx, width, height);
+  return { kind: 'ok', encoded };
+}
+
+// 用给定 palette 对图像做 Floyd-Steinberg dithering，返回 indices
+function _floydSteinbergRemap(
+  data: Uint8ClampedArray,
+  palette: Uint8Array,
+  width: number,
+  height: number,
+): Uint8Array {
+  const n = palette.length / 4;
+  const totalPx = width * height;
+
+  // 最近色 LUT，加速查找
+  const lut = new Uint8Array(64 * 64 * 64);
+  for (let ri = 0; ri < 64; ri++) {
+    for (let gi = 0; gi < 64; gi++) {
+      for (let bi = 0; bi < 64; bi++) {
+        const r = ri * 4 + 2, g = gi * 4 + 2, b = bi * 4 + 2;
+        let best = 0, bestD = Infinity;
+        for (let j = 0; j < n; j++) {
+          const dr = r - palette[j * 4], dg = g - palette[j * 4 + 1], db = b - palette[j * 4 + 2];
+          const d = dr * dr + dg * dg + db * db;
+          if (d < bestD) { bestD = d; best = j; }
+        }
+        lut[ri * 4096 + gi * 64 + bi] = best;
+      }
+    }
+  }
+
+  const indices = new Uint8Array(totalPx);
+  const currErr = new Float32Array((width + 2) * 3);
+  const nextErr = new Float32Array((width + 2) * 3);
+
+  for (let y = 0; y < height; y++) {
+    nextErr.fill(0);
+    const rev = (y & 1) === 1; // 蛇形扫描，减少方向性伪影
+    const xStart = rev ? width - 1 : 0;
+    const xEnd   = rev ? -1 : width;
+    const xStep  = rev ? -1 : 1;
+    const fwd = rev ? -3 : 3;
+    const bwd = rev ?  3 : -3;
+
+    for (let x = xStart; x !== xEnd; x += xStep) {
+      const pi = (y * width + x) * 4;
+      const ei = (x + 1) * 3;
+      let r = data[pi]     + currErr[ei];
+      let g = data[pi + 1] + currErr[ei + 1];
+      let b = data[pi + 2] + currErr[ei + 2];
+      r = r < 0 ? 0 : r > 255 ? 255 : Math.round(r);
+      g = g < 0 ? 0 : g > 255 ? 255 : Math.round(g);
+      b = b < 0 ? 0 : b > 255 ? 255 : Math.round(b);
+      const idx = lut[(r >> 2) * 4096 + (g >> 2) * 64 + (b >> 2)];
+      indices[y * width + x] = idx;
+      const er = r - palette[idx * 4];
+      const eg = g - palette[idx * 4 + 1];
+      const eb = b - palette[idx * 4 + 2];
+      const ne = ei + fwd;
+      currErr[ne]     += er * 0.4375; currErr[ne + 1] += eg * 0.4375; currErr[ne + 2] += eb * 0.4375;
+      const bl = ei + bwd;
+      nextErr[bl]     += er * 0.1875; nextErr[bl + 1] += eg * 0.1875; nextErr[bl + 2] += eb * 0.1875;
+      nextErr[ei]     += er * 0.3125; nextErr[ei + 1] += eg * 0.3125; nextErr[ei + 2] += eb * 0.3125;
+      nextErr[ne]     += er * 0.0625; nextErr[ne + 1] += eg * 0.0625; nextErr[ne + 2] += eb * 0.0625;
+    }
+    currErr.set(nextErr);
+  }
+
+  return indices;
 }
 
 async function _ditheredEncode(
@@ -377,15 +527,39 @@ async function compressPng(bitmap: ImageBitmap, fileSize: number, quality: numbe
   ctx.drawImage(bitmap, 0, 0);
   const imageData = ctx.getImageData(0, 0, width, height);
 
+  // 智能模式：根据图像内容自动选择压缩路径，平衡 高清 / 压缩率 / 稳定性
+  // - quality=100        → True Color 无损（最高保真）
+  // - 颜色 ≤256          → PNG-8 无损量化（图标/低色数图，文件最小）
+  // - imagequant 覆盖好  → imagequant + Floyd-Steinberg dithering（高压缩 + 色彩 OK）
+  // - imagequant 覆盖差  → True Color（避免饱和色变灰，色彩优先）
+  // - imagequant panic   → UPNG.quantize + dithering（保压缩率，避免 True Color 兜底过大）
   let encoded: ArrayBuffer;
   if (quality >= 100) {
     encoded = UPNG.encode([imageData.data.buffer], width, height, 0);
   } else {
-    const t = quality / 100;
-    const numColors = Math.max(8, Math.min(256, Math.round(8 * Math.pow(2, t * 5))));
-    const iq = await getIq();
-    const iqEncoded = iq ? await _iqEncode(imageData, width, height, numColors) : null;
-    encoded = iqEncoded ?? await _ditheredEncode(imageData, width, height, numColors);
+    const totalPx = width * height;
+    const exact = _tryExactPalette(imageData.data, totalPx, 256);
+    if (exact) {
+      encoded = await _encodePng8(exact.palette, exact.indices, width, height);
+    } else {
+      const t = quality / 100;
+      const numColors = Math.max(32, Math.min(256, Math.round(256 * Math.pow(t, 0.8))));
+      const iq = await getIq();
+      const iqResult = iq ? await _iqEncode(imageData, width, height, numColors) : { kind: 'lowCoverage' as const };
+      if (iqResult.kind === 'ok') {
+        encoded = iqResult.encoded;
+      } else if (iqResult.kind === 'panic') {
+        // imagequant wasm 内部 trap，回退 UPNG 量化保压缩率
+        try {
+          encoded = await _ditheredEncode(imageData, width, height, numColors);
+        } catch {
+          encoded = UPNG.encode([imageData.data.buffer], width, height, 0);
+        }
+      } else {
+        // 色域覆盖差或 imagequant 不可用，True Color 保色彩
+        encoded = UPNG.encode([imageData.data.buffer], width, height, 0);
+      }
+    }
   }
 
   const oxipng = await getOxipng();
