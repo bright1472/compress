@@ -9,7 +9,7 @@ export interface QueueItem {
   fileType: FileKind;
   progress: number; throughput: number;
   originalUrl: string; compressedUrl: string;
-  compressedSize: number; errorMsg: string;
+  compressedSize: number; errorMsg: string; formatNote: string;
   engineUsed: string;
   startTime: number; elapsed: number; remaining: number;
 }
@@ -58,7 +58,7 @@ export function useCompressionQueue(opts: UseCompressionQueueOptions) {
         file, fileType: opts.fileType, status: 'pending',
         progress: 0, throughput: 0,
         originalUrl: URL.createObjectURL(file),
-        compressedUrl: '', compressedSize: 0, errorMsg: '', engineUsed: '',
+        compressedUrl: '', compressedSize: 0, errorMsg: '', formatNote: '', engineUsed: '',
         startTime: 0, elapsed: 0, remaining: 0,
       };
       queue.value.push(item);
@@ -144,7 +144,7 @@ export function useCompressionQueue(opts: UseCompressionQueueOptions) {
           next.progress = 0;
           next.compressedSize = 0;
           next.errorMsg = '';
-          next.engineUsed = '';
+          next.engineUsed = ''; next.formatNote = '';
           isCancellingItem.value = false;
           break;
         } else if (next.status === 'done' && opts.onItemDone) {
@@ -160,7 +160,7 @@ export function useCompressionQueue(opts: UseCompressionQueueOptions) {
             i.progress = 0;
             i.compressedSize = 0;
             i.errorMsg = '';
-            i.engineUsed = '';
+            i.engineUsed = ''; i.formatNote = '';
           }
         });
       }

@@ -34,15 +34,15 @@ const handleCancelItem = () => {
 };
 
 // ── 文件验证 ─────────────────────────────────────────────────────
-const VALID_VIDEO_TYPES = new Set(['video/mp4', 'video/quicktime', 'video/x-matroska', 'video/avi', 'video/webm', 'video/x-flv', 'video/x-ms-wmv', 'video/x-msvideo', 'video/3gpp', 'video/ogg']);
-const VALID_VIDEO_EXT = new Set(['mp4', 'mov', 'mkv', 'avi', 'webm', 'flv', 'wmv', '3gp', 'ogv', 'm4v', 'ts', 'mts']);
+const VALID_VIDEO_TYPES = new Set(['video/mp4', 'video/quicktime', 'video/x-matroska', 'video/avi', 'video/webm', 'video/x-flv', 'video/x-ms-wmv', 'video/x-msvideo', 'video/ogg', 'video/mp2t', 'video/3gpp']);
+const VALID_VIDEO_EXT = new Set(['mp4', 'mov', 'mkv', 'avi', 'webm', 'flv', 'wmv', 'ogv', 'm4v', 'ts', 'mts', '3gp']);
 const getExt = (f: File) => f.name.split('.').pop()?.toLowerCase() ?? '';
 const isValidFile = (f: File) => VALID_VIDEO_TYPES.has(f.type) || VALID_VIDEO_EXT.has(getExt(f));
 
 // ── Settings（视频独有）──────────────────────────────────────────
 const SETTINGS_KEY = 'titan-video-settings';
-const SETTINGS_VIEW_KEY = 'titan-view-mode';
-const viewMode = ref<'list' | 'split'>((localStorage.getItem(SETTINGS_VIEW_KEY) as 'list' | 'split') || 'split');
+const SETTINGS_VIEW_KEY = 'titan-video-view-mode';
+const viewMode = ref<'list' | 'split'>((localStorage.getItem(SETTINGS_VIEW_KEY) as 'list' | 'split') || 'list');
 watch(viewMode, (v) => localStorage.setItem(SETTINGS_VIEW_KEY, v));
 const _saved = (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null'); } catch { return null; } })();
 const VALID_CODECS = new Set(['libx264', 'libx265', 'av1']);
@@ -118,11 +118,12 @@ const processItem = async (item: QueueItem) => {
       item.file,
       { codec: codec.value, crf: crf.value, preset: preset.value },
       (pct) => {
-        item.progress = Math.min(pct, 99.9);
+        const safePct = isFinite(pct) ? pct : 0;
+        item.progress = Math.min(safePct, 99.9);
         const elapsed = (Date.now() - item.startTime) / 1000;
-        if (elapsed > 0) item.throughput = (item.file.size * (pct / 100)) / 1048576 / elapsed;
+        if (elapsed > 0.5) item.throughput = (item.file.size * (safePct / 100)) / 1048576 / elapsed;
         item.elapsed = elapsed;
-        item.remaining = pct > 2 ? (elapsed / pct) * (100 - pct) : 0;
+        item.remaining = safePct > 2 ? (elapsed / safePct) * (100 - safePct) : 0;
       },
       (decision) => {
         currentTier.value = decision.tier;
@@ -146,6 +147,8 @@ const processItem = async (item: QueueItem) => {
     item.elapsed = (Date.now() - item.startTime) / 1000;
     item.progress = 100;
     item.status = 'done';
+    const inputExt = item.file.name.split('.').pop()?.toLowerCase() ?? '';
+    if (inputExt === 'wmv') item.formatNote = t.value('process.wmvConvertedNote');
     afterCompress();
     reportStats(Math.max(0, item.file.size - item.compressedSize), 'video');
 
@@ -353,6 +356,7 @@ defineExpose({
                     </span>
                     <span class="m-capsule ratio">↓{{ compressionRatio(item) }}%</span>
                     <span class="m-capsule time">{{ fmtTime(item.elapsed) }}</span>
+                    <span v-if="item.formatNote" class="m-capsule fmt-note" :title="item.formatNote">MP4</span>
                   </template>
                   <template v-else-if="item.status === 'processing'">
                     <span class="m-capsule src">{{ fileSizeStr(item.file.size) }}</span>

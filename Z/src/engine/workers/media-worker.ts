@@ -117,6 +117,9 @@ async function runPipeline({ file, config, outputHandle }: any) {
   });
   console.log(`⏱️ [Perf] Encoder check: ${((performance.now() - t1b) / 1000).toFixed(2)}s`);
   console.log(`🔍 [Perf] Encoder supported: ${encSupport.supported}, hwAccel: ${encSupport.config?.hardwareAcceleration || 'none'}`);
+  if (!encSupport.supported) {
+    throw new Error(`当前浏览器不支持编码器 "${codecStr}"，请切换为 H.264`);
+  }
 
   // ── 编码执行 ──
   const output = new Output({

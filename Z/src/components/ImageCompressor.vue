@@ -15,7 +15,7 @@ import { checkAndGate } from '../composables/useCompressGate';
 import { fetchGlobalStats, reportStats, globalSavedBytes, globalTotalFiles, formatBytes } from '../composables/useGlobalStats';
 import { isOutputDirSupported, autoSaveEnabled, dirName, pickDir, clearDir, autoSave } from '../composables/useOutputDir';
 
-type ImageFmt = 'original' | 'png' | 'jpg' | 'webp' | 'avif';
+type ImageFmt = 'original' | 'png' | 'jpg' | 'webp';
 
 const props = defineProps<{ showSettings: boolean }>();
 const emit = defineEmits<{ (e: 'update:showSettings', v: boolean): void }>();
@@ -37,11 +37,11 @@ const isValidFile = (f: File) => VALID_IMAGE_TYPES.has(f.type) || VALID_IMAGE_EX
 
 // ── Settings（图片独有）──────────────────────────────────────────
 const SETTINGS_KEY = 'titan-image-settings';
-const SETTINGS_VIEW_KEY = 'titan-view-mode';
-const viewMode = ref<'list' | 'split'>((localStorage.getItem(SETTINGS_VIEW_KEY) as 'list' | 'split') || 'split');
+const SETTINGS_VIEW_KEY = 'titan-image-view-mode';
+const viewMode = ref<'list' | 'split'>((localStorage.getItem(SETTINGS_VIEW_KEY) as 'list' | 'split') || 'list');
 watch(viewMode, (v) => localStorage.setItem(SETTINGS_VIEW_KEY, v));
 const _saved = (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null'); } catch { return null; } })();
-const VALID_FMTS: ImageFmt[] = ['original','png','jpg','webp','avif'];
+const VALID_FMTS: ImageFmt[] = ['original','png','jpg','webp'];
 const imageOutputFormat = ref<ImageFmt>(VALID_FMTS.includes(_saved?.imageOutputFormat) ? _saved.imageOutputFormat : 'original');
 const imageQuality = ref<number>(typeof _saved?.imageQuality === 'number' ? _saved.imageQuality : 85);
 
@@ -57,7 +57,6 @@ const imageFormatOptions: { value: ImageFmt; label: string }[] = [
   { value: 'png', label: 'PNG' },
   { value: 'jpg', label: 'JPG' },
   { value: 'webp', label: 'WebP' },
-  { value: 'avif', label: 'AVIF' },
 ];
 
 // ── 处理 ──────────────────────────────────────────────────────────
@@ -76,11 +75,12 @@ const processItem = async (item: QueueItem) => {
       item.file,
       { codec: 'libx264', crf: 28, preset: 'fast' }, // ignored for image path
       (pct) => {
-        item.progress = Math.min(pct, 99.9);
+        const safePct = isFinite(pct) ? pct : 0;
+        item.progress = Math.min(safePct, 99.9);
         const elapsed = (Date.now() - item.startTime) / 1000;
-        if (elapsed > 0) item.throughput = (item.file.size * (pct / 100)) / 1048576 / elapsed;
+        if (elapsed > 0.5) item.throughput = (item.file.size * (safePct / 100)) / 1048576 / elapsed;
         item.elapsed = elapsed;
-        item.remaining = pct > 2 ? (elapsed / pct) * (100 - pct) : 0;
+        item.remaining = safePct > 2 ? (elapsed / safePct) * (100 - safePct) : 0;
       },
       undefined,
       'image',
@@ -99,9 +99,9 @@ const processItem = async (item: QueueItem) => {
     const compressedMB = (item.compressedSize / 1048576).toFixed(2);
     const ratio = ((item.compressedSize / item.file.size) * 100).toFixed(1);
     logger.info('system', `[image][Benchmark] ${item.file.name} | ${originalMB}MB -> ${compressedMB}MB | ${item.elapsed.toFixed(2)}s | Ratio: ${ratio}% | Engine: Canvas API`);
-  } catch (e: any) {
+  } catch (e: unknown) {
     item.status = 'error';
-    const msg = e.message || t.value('process.encodingFailed');
+    const msg = e instanceof Error ? e.message : t.value('process.encodingFailed');
     if (msg.startsWith('FORMAT_UNSUPPORTED:')) {
       const fmt = msg.split(':')[1];
       item.errorMsg = fmt === 'avif' ? t.value('image.avifNotSupported') : t.value('image.webpNotSupported');

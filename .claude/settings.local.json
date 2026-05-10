@@ -76,7 +76,10 @@
       "Bash(npx vitest *)",
       "Bash(git add *)",
       "Bash(git commit -m ' *)",
-      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(f'总计 {len\\(d\\)} 个功能点'\\); [print\\(f\\\\\"{x['id']} {x['priority']} {x['title']}\\\\\"\\) for x in d]\")"
+      "Bash(python3 -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(f'总计 {len\\(d\\)} 个功能点'\\); [print\\(f\\\\\"{x['id']} {x['priority']} {x['title']}\\\\\"\\) for x in d]\")",
+      "Bash(grep -E \"^\\(avi|flv|wmv|asf|matroska|mp4|mov|webm\\)$\")",
+      "Bash(grep -E \"^\\(avi|flv|asf|matroska|mp4|webm|ogg\\)$\")",
+      "Bash(grep -E \" muxer$\")"
     ]
   }
 }
