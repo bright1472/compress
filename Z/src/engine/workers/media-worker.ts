@@ -107,7 +107,7 @@ async function runPipeline({ file, config, outputHandle }: any) {
   const codec = mapCodec(config.codec);
   console.log(`🔍 [Perf] Checking encoder support for codec="${codec}" at ${width}x${height}...`);
   const t1b = performance.now();
-  const codecStr = codec === 'avc' ? 'avc1.640028' : codec === 'hevc' ? 'hev1.1.6.L93.90' : 'av01.0.01M.08';
+  const codecStr = buildCodecString(codec, width, height);
   const encSupport = await VideoEncoder.isConfigSupported({
     codec: codecStr,
     width: Math.max(width, 2),
@@ -183,6 +183,34 @@ function mapCodec(legacy: string | undefined): VideoCodec {
   return 'avc';
 }
 
+/**
+ * 按分辨率动态生成 codec string，匹配实际所需 Level。
+ * 之前固定低 Level（H.264 L4.0、HEVC L3.1、AV1 L2.1）会导致 4K 视频被
+ * VideoEncoder.isConfigSupported 直接拒绝。
+ *
+ * H.264 High Profile：Level hex 编码（L4.2=0x2A, L5.0=0x32, L5.1=0x33, L6.0=0x3C）
+ * HEVC Main Profile：level_idc = level × 30（L4.1=123, L5.1=153, L6.0=180）
+ * AV1 Main Profile：sequence_level_idx 十进制两位（L5.0=12, L6.0=16, L6.1=17）
+ */
+function buildCodecString(codec: VideoCodec, width: number, height: number): string {
+  const pixels = width * height;
+  if (codec === 'avc') {
+    if (pixels <= 1920 * 1080) return 'avc1.64002A';   // L4.2  ≤1080p@60
+    if (pixels <= 2560 * 1440) return 'avc1.640032';   // L5.0  ≤1440p
+    if (pixels <= 3840 * 2160) return 'avc1.640033';   // L5.1  ≤4K@60
+    return 'avc1.64003C';                              // L6.0  8K
+  }
+  if (codec === 'hevc') {
+    if (pixels <= 1920 * 1080) return 'hev1.1.6.L123.B0';  // L4.1  ≤1080p@60
+    if (pixels <= 3840 * 2160) return 'hev1.1.6.L153.B0';  // L5.1  ≤4K@60
+    return 'hev1.1.6.L180.B0';                              // L6.0  8K
+  }
+  // AV1
+  if (pixels <= 1920 * 1080) return 'av01.0.08M.08';   // L4.0
+  if (pixels <= 3840 * 2160) return 'av01.0.16M.08';   // L6.0
+  return 'av01.0.17M.08';                              // L6.1
+}
+
 async function cleanup() {
   try { await conversion?.cancel(); } catch {}
   try { input?.dispose(); } catch { /* ignore: may already be disposed internally */ }
@@ -210,16 +238,21 @@ function calculateSmartBitrate(
 ): number {
   const originalBitrate = (fileSize * 8) / durationSeconds;
 
+  // 推荐码率参考 YouTube/Netflix H.264 SDR 规范
   const pixels = width * height;
   let recommendedBitrate = 0;
   if (pixels <= 640 * 480) {
-    recommendedBitrate = 1_500_000;
+    recommendedBitrate = 1_500_000;        // SD
   } else if (pixels <= 1280 * 720) {
-    recommendedBitrate = 4_000_000;
+    recommendedBitrate = 4_000_000;        // 720p
   } else if (pixels <= 1920 * 1080) {
-    recommendedBitrate = 8_000_000;
+    recommendedBitrate = 8_000_000;        // 1080p
+  } else if (pixels <= 2560 * 1440) {
+    recommendedBitrate = 16_000_000;       // 1440p (2K)
+  } else if (pixels <= 3840 * 2160) {
+    recommendedBitrate = 35_000_000;       // 2160p (4K)
   } else {
-    recommendedBitrate = 30_000_000;
+    recommendedBitrate = 80_000_000;       // 8K+
   }
 
   let smartBitrate: number;

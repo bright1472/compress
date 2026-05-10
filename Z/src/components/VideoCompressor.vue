@@ -97,6 +97,15 @@ const tierLabel = computed(() => {
 // 仅在运行中才显示 CPU 模式提示，取消/完成后自动隐藏
 const isCpuMode = computed(() => q.isRunning.value && currentTier.value !== null && currentTier.value >= 3);
 
+// CPU 模式触发原因：判断当前处理项是否是 mediabunny 不支持的格式
+const FORMAT_FORCED_FFMPEG = new Set(['avi', 'flv', 'wmv', '3gp']);
+const cpuReason = computed(() => {
+  const ext = q.currentProcessing.value?.file.name.split('.').pop()?.toLowerCase() ?? '';
+  return FORMAT_FORCED_FFMPEG.has(ext)
+    ? t.value('process.cpuReasonFormat')
+    : t.value('process.cpuReasonResolution');
+});
+
 // terminate() 触发后的取消标志，processItem 用它判断是否丢弃残缺输出
 const stopRequested = ref(false);
 const previewError = ref(false);
@@ -285,7 +294,7 @@ defineExpose({
     <Transition name="toast">
       <div v-if="isCpuMode" class="cpu-mode-banner">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M9 9h6v6H9z" fill="currentColor" opacity=".4"/><path d="M2 9h2M2 15h2M20 9h2M20 15h2M9 2v2M15 2v2M9 20v2M15 20v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        <span>{{ t('process.cpuModeHint') }}</span>
+        <span>{{ t('process.cpuModeHint') }} — {{ cpuReason }}</span>
       </div>
     </Transition>
 
@@ -420,8 +429,15 @@ defineExpose({
             </div>
             <h2 class="drop-title">{{ t('process.dragToArea') }}</h2>
             <p class="drop-sub">{{ t('process.supportBatch') }}</p>
-            <div class="drop-formats">
-              <span v-for="f in ['MP4','MOV','MKV','AVI','WebM','FLV','WMV']" :key="f" class="fmt-tag">{{ f }}</span>
+            <div class="fmt-group">
+              <div class="fmt-group-row">
+                <span class="fmt-group-label fast">{{ t('process.formatGroupFast') }}</span>
+                <span v-for="f in ['MP4','MOV','MKV','WebM','TS']" :key="f" class="fmt-tag fast">{{ f }}</span>
+              </div>
+              <div class="fmt-group-row">
+                <span class="fmt-group-label slow">{{ t('process.formatGroupSlow') }}</span>
+                <span v-for="f in ['AVI','FLV','WMV','3GP']" :key="f" class="fmt-tag slow">{{ f }}</span>
+              </div>
             </div>
             <div class="drop-features" @click.stop>
               <div class="feat-card">
