@@ -6,8 +6,15 @@ export interface CompressionOptions {
   codec: 'libx264' | 'libx265' | 'libaom-av1';
   crf: number;
   preset: 'ultrafast' | 'fast' | 'medium' | 'slow';
-  outputFormat: 'mp4' | 'webm';
+  outputFormat: 'mp4' | 'webm' | 'avi' | 'flv';
 }
+
+const OUTPUT_MIME: Record<string, string> = {
+  mp4: 'video/mp4',
+  webm: 'video/webm',
+  avi: 'video/avi',
+  flv: 'video/x-flv',
+};
 
 export type ProgressCallback = (progress: number) => void;
 
@@ -24,20 +31,27 @@ export function buildFfmpegArgs(
   opt: CompressionOptions,
   isMultiThreaded: boolean,
 ): string[] {
+  if ((opt.codec === 'libx265' || opt.codec === 'libaom-av1') &&
+      (opt.outputFormat === 'avi' || opt.outputFormat === 'flv')) {
+    throw new Error(
+      `编解码器 ${opt.codec === 'libx265' ? 'H.265' : 'AV1'} 不支持 ${opt.outputFormat.toUpperCase()} 容器，请切换为 H.264`
+    );
+  }
+
   const base = ['-hide_banner', '-loglevel', 'error'];
   const threadFlag = isMultiThreaded ? ['-threads', '0'] : ['-threads', '1'];
   const meta = ['-map_metadata', '0'];
-  const mp4Flags = opt.outputFormat === 'mp4'
-    ? ['-movflags', 'use_metadata_tags+faststart']
-    : [];
+  const isMp4Family = opt.outputFormat === 'mp4';
+  const mp4Flags = isMp4Family ? ['-movflags', 'use_metadata_tags+faststart'] : [];
 
   if (opt.codec === 'libx264') {
     return [...base, '-i', input, ...meta, '-c:v', 'libx264', '-crf', String(opt.crf), '-preset', opt.preset, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', ...mp4Flags, ...threadFlag, '-y', output];
   }
   if (opt.codec === 'libx265') {
+    // H.265 only works reliably in MP4/MOV containers; caller should not request H.265 + AVI/FLV.
     return [...base, '-i', input, ...meta, '-c:v', 'libx265', '-crf', String(opt.crf), '-preset', opt.preset, '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '128k', '-tag:v', 'hvc1', ...mp4Flags, ...threadFlag, '-y', output];
   }
-  // AV1 — cpu-used=8 for speed
+  // AV1 — cpu-used=8 for speed; AV1 only in MP4/WebM containers.
   return [...base, '-i', input, ...meta, '-c:v', 'libaom-av1', '-cpu-used', '8', '-crf', String(opt.crf), '-b:v', '0', '-pix_fmt', 'yuv420p', '-c:a', 'libopus', ...mp4Flags, ...threadFlag, '-y', output];
 }
 
@@ -126,7 +140,7 @@ export class FfmpegEngine {
     await this.ffmpeg.deleteFile(inputName).catch(() => {});
     await this.ffmpeg.deleteFile(outputName).catch(() => {});
 
-    return new Blob([data as BlobPart], { type: `video/${options.outputFormat}` });
+    return new Blob([data as BlobPart], { type: OUTPUT_MIME[options.outputFormat] ?? `video/${options.outputFormat}` });
   }
 
   private buildArgs(input: string, output: string, opt: CompressionOptions): string[] {

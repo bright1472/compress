@@ -74,6 +74,24 @@ const detectHardwareEncoder = async (): Promise<boolean> => {
   }
 };
 
+// ── 格式能力表 ───────────────────────────────────────────────────────
+// mediabunny（WebCodecs 路径）只能解封装这些格式；其余格式强制走 FFmpeg WASM。
+const WEBCODECS_SUPPORTED_EXTS = new Set(['mp4', 'm4v', 'mov', 'mkv', 'webm', 'ogv', 'ts', 'mts']);
+
+const requiresFfmpeg = (file: File): boolean => {
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+  return !WEBCODECS_SUPPORTED_EXTS.has(ext);
+};
+
+// 输入扩展名 → FFmpeg 输出格式
+// WMV 的 VC-1 编码器未编译进 WASM，只能转 MP4；AVI/FLV 保留原格式。
+const ffmpegOutputFormat = (file: File): CompressionOptions['outputFormat'] => {
+  const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
+  if (ext === 'avi') return 'avi';
+  if (ext === 'flv') return 'flv';
+  return 'mp4';
+};
+
 // ── Router ───────────────────────────────────────────────────────────
 
 export class EngineRouter {
@@ -155,10 +173,27 @@ export class EngineRouter {
 
     // ── 视频路径 ─────────────────────────────────────────────────────
     const decision = await this.route(file.size);
-    onRouteDecision?.(decision);
 
-    // Tier 1 & 2 — WebCodecs
-    if (decision.engine === 'webcodecs-hw' || decision.engine === 'webcodecs-sw') {
+    // AVI / FLV / WMV 等格式 mediabunny 无法解封装，强制走 FFmpeg 路径
+    const forceFfmpeg = requiresFfmpeg(file);
+    if (forceFfmpeg) {
+      // 优先读 FfmpegEngine 内部已锁定的线程模式，确保 UI 上报与实际运行一致。
+      // 若 FFmpeg 尚未加载，退回到环境探测（结果与 load() 时一致）。
+      const mt = this.ffmpegEngine.isReady()
+        ? this.ffmpegEngine.threaded
+        : detectSharedArrayBuffer();
+      const ffmpegDecision: RouteDecision = {
+        engine: mt ? 'ffmpeg-mt' : 'ffmpeg-st',
+        tier: mt ? 3 : 4,
+        reason: `格式 ${file.name.split('.').pop()?.toUpperCase()} 需要 FFmpeg WASM 解封装`,
+      };
+      onRouteDecision?.(ffmpegDecision);
+    } else {
+      onRouteDecision?.(decision);
+    }
+
+    // Tier 1 & 2 — WebCodecs（仅 mediabunny 支持的格式）
+    if (!forceFfmpeg && (decision.engine === 'webcodecs-hw' || decision.engine === 'webcodecs-sw')) {
       try {
         const codecMap: Record<string, string> = { libx264: 'libx264', libx265: 'libx265', av1: 'av1' };
         const resultFile = await this.webCodecsEngine.processLargeVideo(
@@ -175,12 +210,13 @@ export class EngineRouter {
         }
         const msg = e instanceof Error ? e.message : String(e);
         logger.warn('system', `WebCodecs crash: ${msg}. Falling back to FFmpeg WASM.`);
-        const fallbackTier: 3 | 4 = detectSharedArrayBuffer() ? 3 : 4;
+        const mt = detectSharedArrayBuffer();
+        const fallbackTier: 3 | 4 = mt ? 3 : 4;
         this._tier = fallbackTier;
         const fallback: RouteDecision = {
-          engine: fallbackTier === 3 ? 'ffmpeg-mt' : 'ffmpeg-st',
+          engine: mt ? 'ffmpeg-mt' : 'ffmpeg-st',
           tier: fallbackTier,
-          reason: `硬件加速引擎失败，自动降级至 FFmpeg WASM（CPU ${fallbackTier === 3 ? '多线程' : '单线程'}）`,
+          reason: `硬件加速引擎失败，自动降级至 FFmpeg WASM（CPU ${mt ? '多线程' : '单线程'}）`,
         };
         this._routePromise = Promise.resolve(fallback);
         onRouteDecision?.(fallback);
@@ -201,7 +237,7 @@ export class EngineRouter {
         codec: ffmpegCodecMap[options.codec] ?? 'libx264',
         crf: options.crf,
         preset: options.preset as CompressionOptions['preset'],
-        outputFormat: 'mp4',
+        outputFormat: ffmpegOutputFormat(file),
       },
       onProgress,
     );

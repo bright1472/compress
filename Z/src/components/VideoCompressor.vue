@@ -34,8 +34,8 @@ const handleCancelItem = () => {
 };
 
 // ── 文件验证 ─────────────────────────────────────────────────────
-const VALID_VIDEO_TYPES = new Set(['video/mp4', 'video/quicktime', 'video/x-matroska', 'video/avi', 'video/webm', 'video/x-flv', 'video/x-ms-wmv', 'video/x-msvideo', 'video/3gpp', 'video/ogg']);
-const VALID_VIDEO_EXT = new Set(['mp4', 'mov', 'mkv', 'avi', 'webm', 'flv', 'wmv', '3gp', 'ogv', 'm4v', 'ts', 'mts']);
+const VALID_VIDEO_TYPES = new Set(['video/mp4', 'video/quicktime', 'video/x-matroska', 'video/avi', 'video/webm', 'video/x-flv', 'video/x-ms-wmv', 'video/x-msvideo', 'video/ogg', 'video/mp2t', 'video/3gpp']);
+const VALID_VIDEO_EXT = new Set(['mp4', 'mov', 'mkv', 'avi', 'webm', 'flv', 'wmv', 'ogv', 'm4v', 'ts', 'mts', '3gp']);
 const getExt = (f: File) => f.name.split('.').pop()?.toLowerCase() ?? '';
 const isValidFile = (f: File) => VALID_VIDEO_TYPES.has(f.type) || VALID_VIDEO_EXT.has(getExt(f));
 
@@ -45,7 +45,7 @@ const SETTINGS_VIEW_KEY = 'titan-video-view-mode';
 const LEGACY_VIEW_KEY = 'titan-view-mode';
 const readViewMode = (): 'list' | 'split' => {
   const saved = localStorage.getItem(SETTINGS_VIEW_KEY) ?? localStorage.getItem(LEGACY_VIEW_KEY);
-  return saved === 'list' || saved === 'split' ? saved : 'split';
+  return saved === 'list' || saved === 'split' ? saved : 'list';
 };
 const viewMode = ref<'list' | 'split'>(readViewMode());
 watch(viewMode, (v) => localStorage.setItem(SETTINGS_VIEW_KEY, v));
@@ -102,6 +102,15 @@ const tierLabel = computed(() => {
 // 仅在运行中才显示 CPU 模式提示，取消/完成后自动隐藏
 const isCpuMode = computed(() => q.isRunning.value && currentTier.value !== null && currentTier.value >= 3);
 
+// CPU 模式触发原因：判断当前处理项是否是 mediabunny 不支持的格式
+const FORMAT_FORCED_FFMPEG = new Set(['avi', 'flv', 'wmv', '3gp']);
+const cpuReason = computed(() => {
+  const ext = q.currentProcessing.value?.file.name.split('.').pop()?.toLowerCase() ?? '';
+  return FORMAT_FORCED_FFMPEG.has(ext)
+    ? t.value('process.cpuReasonFormat')
+    : t.value('process.cpuReasonResolution');
+});
+
 // terminate() 触发后的取消标志，processItem 用它判断是否丢弃残缺输出
 const stopRequested = ref(false);
 const previewError = ref(false);
@@ -123,11 +132,12 @@ const processItem = async (item: QueueItem) => {
       item.file,
       { codec: codec.value, crf: crf.value, preset: preset.value },
       (pct) => {
-        item.progress = Math.min(pct, 99.9);
+        const safePct = isFinite(pct) ? pct : 0;
+        item.progress = Math.min(safePct, 99.9);
         const elapsed = (Date.now() - item.startTime) / 1000;
-        if (elapsed > 0) item.throughput = (item.file.size * (pct / 100)) / 1048576 / elapsed;
+        if (elapsed > 0.5) item.throughput = (item.file.size * (safePct / 100)) / 1048576 / elapsed;
         item.elapsed = elapsed;
-        item.remaining = pct > 2 ? (elapsed / pct) * (100 - pct) : 0;
+        item.remaining = safePct > 2 ? (elapsed / safePct) * (100 - safePct) : 0;
       },
       (decision) => {
         currentTier.value = decision.tier;
@@ -151,6 +161,8 @@ const processItem = async (item: QueueItem) => {
     item.elapsed = (Date.now() - item.startTime) / 1000;
     item.progress = 100;
     item.status = 'done';
+    const inputExt = item.file.name.split('.').pop()?.toLowerCase() ?? '';
+    if (inputExt === 'wmv') item.formatNote = t.value('process.wmvConvertedNote');
     afterCompress();
     reportStats(Math.max(0, item.file.size - item.compressedSize), 'video');
 
@@ -291,7 +303,7 @@ defineExpose({
     <Transition name="toast">
       <div v-if="isCpuMode" class="cpu-mode-banner">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><rect x="4" y="4" width="16" height="16" rx="2" stroke="currentColor" stroke-width="1.8"/><path d="M9 9h6v6H9z" fill="currentColor" opacity=".4"/><path d="M2 9h2M2 15h2M20 9h2M20 15h2M9 2v2M15 2v2M9 20v2M15 20v2" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>
-        <span>{{ t('process.cpuModeHint') }}</span>
+        <span>{{ t('process.cpuModeHint') }} — {{ cpuReason }}</span>
       </div>
     </Transition>
 
@@ -359,6 +371,7 @@ defineExpose({
                     </span>
                     <span class="m-capsule ratio">↓{{ compressionRatio(item) }}%</span>
                     <span class="m-capsule time">{{ fmtTime(item.elapsed) }}</span>
+                    <span v-if="item.formatNote" class="m-capsule fmt-note" :title="item.formatNote">MP4</span>
                   </template>
                   <template v-else-if="item.status === 'processing'">
                     <span class="m-capsule src">{{ fileSizeStr(item.file.size) }}</span>
@@ -422,8 +435,15 @@ defineExpose({
             </div>
             <h2 class="drop-title">{{ t('process.dragToArea') }}</h2>
             <p class="drop-sub">{{ t('process.supportBatch') }}</p>
-            <div class="drop-formats">
-              <span v-for="f in ['MP4','MOV','MKV','AVI','WebM','FLV','WMV']" :key="f" class="fmt-tag">{{ f }}</span>
+            <div class="fmt-group">
+              <div class="fmt-group-row">
+                <span class="fmt-group-label fast">{{ t('process.formatGroupFast') }}</span>
+                <span v-for="f in ['MP4','MOV','MKV','WebM','TS']" :key="f" class="fmt-tag fast">{{ f }}</span>
+              </div>
+              <div class="fmt-group-row">
+                <span class="fmt-group-label slow">{{ t('process.formatGroupSlow') }}</span>
+                <span v-for="f in ['AVI','FLV','WMV','3GP']" :key="f" class="fmt-tag slow">{{ f }}</span>
+              </div>
             </div>
             <div class="drop-features" @click.stop>
               <div class="feat-card">
