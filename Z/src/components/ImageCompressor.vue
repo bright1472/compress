@@ -37,8 +37,13 @@ const isValidFile = (f: File) => VALID_IMAGE_TYPES.has(f.type) || VALID_IMAGE_EX
 
 // ── Settings（图片独有）──────────────────────────────────────────
 const SETTINGS_KEY = 'titan-image-settings';
-const SETTINGS_VIEW_KEY = 'titan-view-mode';
-const viewMode = ref<'list' | 'split'>((localStorage.getItem(SETTINGS_VIEW_KEY) as 'list' | 'split') || 'split');
+const SETTINGS_VIEW_KEY = 'titan-image-view-mode';
+const LEGACY_VIEW_KEY = 'titan-view-mode';
+const readViewMode = (): 'list' | 'split' => {
+  const saved = localStorage.getItem(SETTINGS_VIEW_KEY) ?? localStorage.getItem(LEGACY_VIEW_KEY);
+  return saved === 'list' || saved === 'split' ? saved : 'split';
+};
+const viewMode = ref<'list' | 'split'>(readViewMode());
 watch(viewMode, (v) => localStorage.setItem(SETTINGS_VIEW_KEY, v));
 const _saved = (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null'); } catch { return null; } })();
 const VALID_FMTS: ImageFmt[] = ['original','png','jpg','webp','avif'];

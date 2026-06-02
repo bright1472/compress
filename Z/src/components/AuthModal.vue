@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue';
-import { login, register, authUser, updateUser } from '../composables/useAuth';
+import { login, register, updateUser } from '../composables/useAuth';
 import { syncUsage } from '../composables/useUsageLimit';
 import { t } from '../locales/i18n';
 import { api } from '../services/api';
@@ -125,9 +125,6 @@ function copyToClipboard(text: string) {
   navigator.clipboard?.writeText(text).catch(() => {});
 }
 
-function closeAfterCreds() {
-  emit('close');
-}
 </script>
 
 <template>

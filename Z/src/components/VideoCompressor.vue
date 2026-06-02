@@ -41,8 +41,13 @@ const isValidFile = (f: File) => VALID_VIDEO_TYPES.has(f.type) || VALID_VIDEO_EX
 
 // ── Settings（视频独有）──────────────────────────────────────────
 const SETTINGS_KEY = 'titan-video-settings';
-const SETTINGS_VIEW_KEY = 'titan-view-mode';
-const viewMode = ref<'list' | 'split'>((localStorage.getItem(SETTINGS_VIEW_KEY) as 'list' | 'split') || 'split');
+const SETTINGS_VIEW_KEY = 'titan-video-view-mode';
+const LEGACY_VIEW_KEY = 'titan-view-mode';
+const readViewMode = (): 'list' | 'split' => {
+  const saved = localStorage.getItem(SETTINGS_VIEW_KEY) ?? localStorage.getItem(LEGACY_VIEW_KEY);
+  return saved === 'list' || saved === 'split' ? saved : 'split';
+};
+const viewMode = ref<'list' | 'split'>(readViewMode());
 watch(viewMode, (v) => localStorage.setItem(SETTINGS_VIEW_KEY, v));
 const _saved = (() => { try { return JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null'); } catch { return null; } })();
 const VALID_CODECS = new Set(['libx264', 'libx265', 'av1']);
@@ -225,6 +230,10 @@ const nativeInputDir = ref('');
 const nativeOutputDir = ref('');
 const nativeRunning = ref(false);
 const nativeProgressVal = ref<NativeProgress | null>(null);
+const nativeProgressText = computed(() => {
+  const p = nativeProgressVal.value;
+  return p ? `⚡ ${p.file} · ${p.percent}% · ${p.fps} fps · ETA ${p.eta}` : '正在进行本地高性能压缩…';
+});
 
 watch(nativeMode, (v) => localStorage.setItem('titan-native-mode', v ? '1' : '0'));
 
@@ -290,10 +299,7 @@ defineExpose({
     <Transition v-if="false" name="toast">
       <div v-if="nativeRunning" class="cpu-mode-banner" style="color:#22c55e;border-color:#22c55e44">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="currentColor"/></svg>
-        <span v-if="nativeProgressVal">
-          ⚡ {{ nativeProgressVal.file }} · {{ nativeProgressVal.percent }}% · {{ nativeProgressVal.fps }} fps · ETA {{ nativeProgressVal.eta }}
-        </span>
-        <span v-else>正在进行本地高性能压缩…</span>
+        <span>{{ nativeProgressText }}</span>
       </div>
     </Transition>
 

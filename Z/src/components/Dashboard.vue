@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted, watch, provide } from 'vue';
 import { EngineRouter } from '../engine/engine-router';
-import { api } from '../services/api';
 import VideoCompressor from './VideoCompressor.vue';
 import ImageCompressor from './ImageCompressor.vue';
 import LoggerConsole from './LoggerConsole.vue';

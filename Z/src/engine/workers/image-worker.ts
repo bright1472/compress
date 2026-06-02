@@ -339,6 +339,141 @@ function _paletteCoverageOk(
   return true;
 }
 
+/**
+ * 检测 PNG-8 抖动是否破坏照片/人物的平滑质感。
+ *
+ * palette 覆盖只能保证“红色还在”，不能保证“皮肤/嘴唇不变脏”。
+ * Floyd-Steinberg 在 UI/图标/扁平插画上通常很好，但在人像的低梯度肤色区会制造
+ * 蓝灰/橙黄点阵。这里专门拦截这种候选，失败则上层回退 True Color PNG。
+ */
+function _ditherTextureOk(
+  data: Uint8ClampedArray,
+  palette: Uint8Array,
+  indices: Uint8Array,
+  width: number,
+  height: number,
+): boolean {
+  const totalPx = width * height;
+  const step = Math.max(1, Math.floor(totalPx / 180_000));
+
+  let watched = 0;
+  let noisy = 0;
+  let sumErr = 0;
+  let maxErr = 0;
+
+  for (let p = 0; p < totalPx; p += step) {
+    const x = p % width;
+    const y = Math.floor(p / width);
+    if (x >= width - 1 || y >= height - 1) continue;
+
+    const i = p * 4;
+    if (data[i + 3] < 128) continue;
+
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    const right = i + 4;
+    const down = i + width * 4;
+    const localGradient = Math.max(
+      Math.abs(r - data[right]),
+      Math.abs(g - data[right + 1]),
+      Math.abs(b - data[right + 2]),
+      Math.abs(r - data[down]),
+      Math.abs(g - data[down + 1]),
+      Math.abs(b - data[down + 2]),
+    );
+
+    // 只看本应平滑的肤色区域。高梯度边缘/线稿、非人物卡通色块仍允许 PNG-8。
+    if (!_isSkinLike(r, g, b) || localGradient > 12) continue;
+
+    const qi = indices[p] * 4;
+    const er = Math.abs(r - palette[qi]);
+    const eg = Math.abs(g - palette[qi + 1]);
+    const eb = Math.abs(b - palette[qi + 2]);
+    const err = Math.max(er, eg, eb);
+
+    watched++;
+    sumErr += err;
+    maxErr = Math.max(maxErr, err);
+    if (err > 22) noisy++;
+  }
+
+  if (watched < 256) return true;
+
+  const avgErr = sumErr / watched;
+  const noisyRate = noisy / watched;
+
+  return avgErr <= 8.5 && maxErr <= 64 && noisyRate <= 0.055;
+}
+
+/**
+ * 非抖动 PNG-8 候选的质感检测。
+ *
+ * imagequant 自带的直接 indices 通常比 Floyd-Steinberg 更干净，也更容易被 PNG 压缩；
+ * 风险是平滑肤色可能出现色阶。这里只对肤色低梯度区域做约束，既拦截明显断层，
+ * 又允许它作为 True Color 之前的高压缩安全候选。
+ */
+function _directTextureOk(
+  data: Uint8ClampedArray,
+  palette: Uint8Array,
+  indices: Uint8Array,
+  width: number,
+  height: number,
+): boolean {
+  const totalPx = width * height;
+  const step = Math.max(1, Math.floor(totalPx / 180_000));
+
+  let watched = 0;
+  let bad = 0;
+  let sumErr = 0;
+  let maxErr = 0;
+
+  for (let p = 0; p < totalPx; p += step) {
+    const x = p % width;
+    const y = Math.floor(p / width);
+    if (x >= width - 1 || y >= height - 1) continue;
+
+    const i = p * 4;
+    if (data[i + 3] < 128) continue;
+
+    const r = data[i], g = data[i + 1], b = data[i + 2];
+    const right = i + 4;
+    const down = i + width * 4;
+    const localGradient = Math.max(
+      Math.abs(r - data[right]),
+      Math.abs(g - data[right + 1]),
+      Math.abs(b - data[right + 2]),
+      Math.abs(r - data[down]),
+      Math.abs(g - data[down + 1]),
+      Math.abs(b - data[down + 2]),
+    );
+
+    if (!_isSkinLike(r, g, b) || localGradient > 12) continue;
+
+    const qi = indices[p] * 4;
+    const err = Math.max(
+      Math.abs(r - palette[qi]),
+      Math.abs(g - palette[qi + 1]),
+      Math.abs(b - palette[qi + 2]),
+    );
+
+    watched++;
+    sumErr += err;
+    maxErr = Math.max(maxErr, err);
+    if (err > 32) bad++;
+  }
+
+  if (watched < 256) return true;
+
+  const avgErr = sumErr / watched;
+  const badRate = bad / watched;
+
+  return avgErr <= 13 && maxErr <= 96 && badRate <= 0.08;
+}
+
+function _isSkinLike(r: number, g: number, b: number): boolean {
+  const { h, s, v } = _rgbToHsv(r, g, b);
+  return h >= 0 && h <= 55 && s >= 0.10 && s <= 0.70 && v >= 0.45 && r >= b;
+}
+
 type IqEncodeResult =
   | { kind: 'ok'; encoded: ArrayBuffer }
   | { kind: 'lowCoverage' }       // imagequant 量化色域覆盖差，应回退 True Color
@@ -362,8 +497,17 @@ async function _iqEncode(
   if (!_paletteCoverageOk(imageData.data, pal, width, height)) {
     return { kind: 'lowCoverage' };
   }
-  // 用原图 + imagequant 的 palette 做 Floyd-Steinberg dithering（替代 imagequant 的硬映射 indices）
+  // 先尝试 imagequant 的直接映射：更少脏点、更低熵，通常比抖动 PNG-8 更小。
+  const directIdx = result.indices.slice();
+  if (_directTextureOk(imageData.data, pal, directIdx, width, height)) {
+    const encoded = await _encodePng8(pal, directIdx, width, height);
+    return { kind: 'ok', encoded };
+  }
+  // 直接映射若在肤色平滑区色阶过重，再尝试 Floyd-Steinberg。
   const idx = _floydSteinbergRemap(imageData.data, pal, width, height);
+  if (!_ditherTextureOk(imageData.data, pal, idx, width, height)) {
+    return { kind: 'lowCoverage' };
+  }
   const encoded = await _encodePng8(pal, idx, width, height);
   return { kind: 'ok', encoded };
 }
@@ -677,7 +821,8 @@ self.onmessage = async (e: MessageEvent) => {
       }
 
       if (result) {
-        self.postMessage({ type: 'DONE', id, buffer: result, outputMime: targetMime }, [result]);
+        (self as unknown as { postMessage(message: unknown, transfer?: Transferable[]): void })
+          .postMessage({ type: 'DONE', id, buffer: result, outputMime: targetMime }, [result]);
       } else {
         // 压缩后体积更大，返回原始 buffer（调用方用原文件）
         self.postMessage({ type: 'ORIGINAL', id });
