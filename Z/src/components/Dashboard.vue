@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onUnmounted, watch, provide } from 'vue';
 import { EngineRouter } from '../engine/engine-router';
 import VideoCompressor from './VideoCompressor.vue';
 import ImageCompressor from './ImageCompressor.vue';
+import ImageMatting from './ImageMatting.vue';
 import LoggerConsole from './LoggerConsole.vue';
 import AuthModal from './AuthModal.vue';
 import ActivationModal from './ActivationModal.vue';
@@ -54,13 +55,17 @@ watch(mode, () => { showSettings.value = false; });
 // ── Component Refs ──────────────────────
 const videoRef = ref<InstanceType<typeof VideoCompressor> | null>(null);
 const imageRef = ref<InstanceType<typeof ImageCompressor> | null>(null);
+const mattingRef = ref<InstanceType<typeof ImageMatting> | null>(null);
 
 const videoRunning = computed(() => !!videoRef.value?.isRunning);
 const imageRunning = computed(() => !!imageRef.value?.isRunning);
+const mattingRunning = computed(() => !!mattingRef.value?.isRunning);
 const videoTotal = computed(() => videoRef.value?.totalCount ?? 0);
 const imageTotal = computed(() => imageRef.value?.totalCount ?? 0);
+const mattingTotal = computed(() => mattingRef.value?.totalCount ?? 0);
 const videoBadge = computed(() => videoRunning.value ? (videoRef.value?.currentProcessing ? 1 : 0) : 0);
 const imageBadge = computed(() => imageRunning.value ? (imageRef.value?.currentProcessing ? 1 : 0) : 0);
+const mattingBadge = computed(() => mattingRunning.value ? 1 : 0);
 
 // ── Lifecycle ───────────────────────────
 const onKeydown = (e: KeyboardEvent) => {
@@ -68,7 +73,7 @@ const onKeydown = (e: KeyboardEvent) => {
 };
 const onGlobalClick = () => { showUserMenu.value = false; };
 const handleBeforeUnload = (e: BeforeUnloadEvent) => {
-  if (videoTotal.value > 0 || imageTotal.value > 0) {
+  if (videoTotal.value > 0 || imageTotal.value > 0 || mattingTotal.value > 0) {
     e.preventDefault();
     e.returnValue = '';
   }
@@ -112,6 +117,11 @@ onUnmounted(() => {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><rect x="3" y="3" width="18" height="18" rx="2" stroke="currentColor" stroke-width="2"/><circle cx="9" cy="9" r="2" stroke="currentColor" stroke-width="2"/><path d="M21 15l-5-5-10 10" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
             <span>{{ t('mode.image') }}</span>
             <span v-if="mode !== 'image' && imageBadge > 0" class="mode-badge">{{ imageBadge }}</span>
+          </button>
+          <button class="mode-pill" role="tab" :aria-selected="mode === 'matting'" :class="{ active: mode === 'matting' }" @click="setMode('matting')">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 19c5-1 7-4 8-9 1 5 3 8 8 9M8 5h8M12 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <span>{{ t('mode.matting') }}</span>
+            <span v-if="mode !== 'matting' && mattingBadge > 0" class="mode-badge">{{ mattingBadge }}</span>
           </button>
         </div>
 
@@ -178,6 +188,7 @@ onUnmounted(() => {
 
     <VideoCompressor ref="videoRef" v-show="mode === 'video'" :show-settings="mode === 'video' && showSettings" @update:show-settings="showSettings = $event" />
     <ImageCompressor ref="imageRef" v-show="mode === 'image'" :show-settings="mode === 'image' && showSettings" @update:show-settings="showSettings = $event" />
+    <ImageMatting ref="mattingRef" v-show="mode === 'matting'" :show-settings="mode === 'matting' && showSettings" @update:show-settings="showSettings = $event" />
 
     <LoggerConsole :show="showLogger" @close="showLogger = false" />
 

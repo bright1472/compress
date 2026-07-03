@@ -57,6 +57,7 @@ export const zh = {
   mode: {
     video: '视频',
     image: '图片',
+    matting: '智能抠图',
     switchTo: '切换到{mode}模式',
   },
   config: {
@@ -267,6 +268,7 @@ export const en = {
   mode: {
     video: 'Video',
     image: 'Image',
+    matting: 'AI Matting',
     switchTo: 'Switch to {mode} mode',
   },
   config: {

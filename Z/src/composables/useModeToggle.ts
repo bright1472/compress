@@ -1,12 +1,12 @@
 import { ref, watch } from 'vue';
 
-export type CompressMode = 'video' | 'image';
+export type CompressMode = 'video' | 'image' | 'matting';
 
 const MODE_STORAGE_KEY = 'titan-mode';
 
 const getInitialMode = (): CompressMode => {
   const saved = localStorage.getItem(MODE_STORAGE_KEY);
-  return saved === 'image' ? 'image' : 'video';
+  return saved === 'image' || saved === 'matting' ? saved : 'video';
 };
 
 export const mode = ref<CompressMode>(getInitialMode());
