@@ -62,7 +62,11 @@ const isMultiThreaded = (): boolean => {
   catch { return false; }
 };
 
-const corePath = () => isMultiThreaded() ? '/ffmpeg-mt' : '/ffmpeg';
+const corePath = () => {
+  const base = import.meta.env.BASE_URL;
+  const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
+  return isMultiThreaded() ? `${cleanBase}/ffmpeg-mt` : `${cleanBase}/ffmpeg`;
+};
 
 export class FfmpegEngine {
   private ffmpeg: FFmpeg;

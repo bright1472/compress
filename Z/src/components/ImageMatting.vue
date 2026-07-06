@@ -205,7 +205,7 @@ const processImage = async () => {
 
   try {
     const config: Config = {
-      publicPath: `${window.location.origin}/background-removal/`,
+      publicPath: `${window.location.origin}${import.meta.env.BASE_URL}background-removal/`,
       model: 'isnet_fp16',
       output: { format: 'image/png', quality: 1 },
       progress: (key, current, total) => {
