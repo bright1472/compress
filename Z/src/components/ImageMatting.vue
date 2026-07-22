@@ -9,6 +9,25 @@ const props = defineProps<{ showSettings: boolean }>();
 const emit = defineEmits<{ (e: 'update:showSettings', v: boolean): void }>();
 
 type MattingStage = 'empty' | 'ready' | 'processing' | 'done' | 'error';
+type EditTool = 'wand' | 'erase' | 'restore';
+type MattingMode = 'auto' | 'icon';
+
+interface RenderFrame {
+  minX: number;
+  minY: number;
+  scale: number;
+  dx: number;
+  dy: number;
+}
+
+interface IconMaskMetrics {
+  edgeSamples: number;
+  seedPixels: number;
+  clearedPixels: number;
+  totalPixels: number;
+  tolerance: number;
+  background: { red: number; green: number; blue: number };
+}
 
 const fileInputRef = ref<HTMLInputElement | null>(null);
 const previewCanvasRef = ref<HTMLCanvasElement | null>(null);
@@ -26,11 +45,28 @@ const outputSize = ref(1024);
 const radius = ref(160);
 const outputBytes = ref(0);
 const elapsedMs = ref(0);
+const editTool = ref<EditTool>('wand');
+const cleanupLevel = ref(1);
+const wandTolerance = ref(36);
+const brushSize = ref(42);
+const mattingMode = ref<MattingMode>('auto');
+const iconEdgeTolerance = ref(44);
+const undoStack: ImageData[] = [];
+const undoVersion = ref(0);
+let matteSourceCanvas: HTMLCanvasElement | null = null;
+let workingCanvas: HTMLCanvasElement | null = null;
+let renderFrame: RenderFrame | null = null;
+let isPainting = false;
+let previousBrushPoint: { x: number; y: number } | null = null;
+let previewFramePending = false;
 
 const totalCount = computed(() => (originalFile.value ? 1 : 0));
 const isRunning = computed(() => stage.value === 'processing');
 const currentProcessing = computed(() => (isRunning.value ? originalFile.value : null));
 const canProcess = computed(() => !!originalFile.value && !isRunning.value);
+const canEdit = computed(() => stage.value === 'done' && !!workingCanvas && !isRunning.value);
+const canUndo = computed(() => undoVersion.value > 0 && canEdit.value);
+const isIconMode = computed(() => mattingMode.value === 'icon');
 const downloadName = computed(() => {
   const base = originalFile.value?.name.replace(/\.[^.]+$/, '') || 'image';
   return `titan_matting_${base}.png`;
@@ -60,6 +96,11 @@ const resetResult = () => {
   elapsedMs.value = 0;
   progressPct.value = 0;
   progressText.value = '';
+  matteSourceCanvas = null;
+  workingCanvas = null;
+  renderFrame = null;
+  undoStack.length = 0;
+  undoVersion.value = 0;
 };
 
 const loadFile = (file: File) => {
@@ -125,16 +166,143 @@ const roundRect = (ctx: CanvasRenderingContext2D, x: number, y: number, w: numbe
   ctx.closePath();
 };
 
-const redrawResult = async (shouldCommit?: () => boolean) => {
-  if (!mattedBlob.value) return;
-  const img = await imageFromBlob(mattedBlob.value);
-  const scanCanvas = document.createElement('canvas');
-  scanCanvas.width = img.naturalWidth;
-  scanCanvas.height = img.naturalHeight;
-  const scanCtx = scanCanvas.getContext('2d', { willReadFrequently: true });
-  if (!scanCtx) throw new Error('Canvas unavailable');
-  scanCtx.drawImage(img, 0, 0);
+const getCanvasContext = (canvas: HTMLCanvasElement) => {
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) throw new Error('Canvas unavailable');
+  return ctx;
+};
 
+const applySoftAlphaCleanup = (canvas: HTMLCanvasElement) => {
+  const ctx = getCanvasContext(canvas);
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const floor = [0, 5, 12][cleanupLevel.value];
+  if (!floor) return;
+
+  for (let i = 3; i < image.data.length; i += 4) {
+    const alpha = image.data[i];
+    if (alpha <= floor) image.data[i] = 0;
+    else image.data[i] = Math.round(((alpha - floor) / (255 - floor)) * 255);
+  }
+  ctx.putImageData(image, 0, 0);
+};
+
+const createWorkingCanvas = async (blob: Blob) => {
+  const img = await imageFromBlob(blob);
+  const source = document.createElement('canvas');
+  source.width = img.naturalWidth;
+  source.height = img.naturalHeight;
+  getCanvasContext(source).drawImage(img, 0, 0);
+
+  const working = document.createElement('canvas');
+  working.width = source.width;
+  working.height = source.height;
+  getCanvasContext(working).drawImage(source, 0, 0);
+  applySoftAlphaCleanup(working);
+  matteSourceCanvas = source;
+  workingCanvas = working;
+};
+
+const clearEdgeConnectedBackground = (canvas: HTMLCanvasElement): IconMaskMetrics | null => {
+  const ctx = getCanvasContext(canvas);
+  const image = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const { data, width, height } = image;
+  const edgePixels: number[] = [];
+  for (let x = 0; x < width; x += 1) {
+    edgePixels.push(x, (height - 1) * width + x);
+  }
+  for (let y = 1; y < height - 1; y += 1) {
+    edgePixels.push(y * width, y * width + width - 1);
+  }
+
+  let red = 0;
+  let green = 0;
+  let blue = 0;
+  let samples = 0;
+  for (const pixel of edgePixels) {
+    const offset = pixel * 4;
+    if (data[offset + 3] === 0) continue;
+    red += data[offset];
+    green += data[offset + 1];
+    blue += data[offset + 2];
+    samples += 1;
+  }
+  if (!samples) return null;
+
+  const background = { red: red / samples, green: green / samples, blue: blue / samples };
+  const toleranceSq = iconEdgeTolerance.value * iconEdgeTolerance.value * 3;
+  const visited = new Uint8Array(width * height);
+  const queue = new Int32Array(width * height);
+  let head = 0;
+  let tail = 0;
+  let clearedPixels = 0;
+  const isBackgroundLike = (pixel: number) => {
+    const offset = pixel * 4;
+    const dr = data[offset] - background.red;
+    const dg = data[offset + 1] - background.green;
+    const db = data[offset + 2] - background.blue;
+    return data[offset + 3] > 0 && dr * dr + dg * dg + db * db <= toleranceSq;
+  };
+
+  for (const pixel of edgePixels) {
+    if (!visited[pixel] && isBackgroundLike(pixel)) {
+      visited[pixel] = 1;
+      queue[tail++] = pixel;
+    }
+  }
+  const seedPixels = tail;
+
+  while (head < tail) {
+    const point = queue[head++];
+    const offset = point * 4;
+    data[offset + 3] = 0;
+    clearedPixels += 1;
+    const x = point % width;
+    const y = Math.floor(point / width);
+    const neighbors = [point - 1, point + 1, point - width, point + width];
+    for (const next of neighbors) {
+      if (next < 0 || next >= width * height || visited[next]) continue;
+      if ((next === point - 1 && x === 0) || (next === point + 1 && x === width - 1) || (next === point - width && y === 0) || (next === point + width && y === height - 1)) continue;
+      if (!isBackgroundLike(next)) continue;
+      visited[next] = 1;
+      queue[tail++] = next;
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+  return {
+    edgeSamples: samples,
+    seedPixels,
+    clearedPixels,
+    totalPixels: width * height,
+    tolerance: iconEdgeTolerance.value,
+    background: {
+      red: Math.round(background.red),
+      green: Math.round(background.green),
+      blue: Math.round(background.blue),
+    },
+  };
+};
+
+const createIconWorkingCanvas = async (file: File) => {
+  const img = await imageFromBlob(file);
+  const source = document.createElement('canvas');
+  source.width = img.naturalWidth;
+  source.height = img.naturalHeight;
+  getCanvasContext(source).drawImage(img, 0, 0);
+
+  const working = document.createElement('canvas');
+  working.width = source.width;
+  working.height = source.height;
+  getCanvasContext(working).drawImage(source, 0, 0);
+  const metrics = clearEdgeConnectedBackground(working);
+  matteSourceCanvas = source;
+  workingCanvas = working;
+  return metrics;
+};
+
+const redrawResult = async (commit = true, shouldCommit?: () => boolean) => {
+  if (!workingCanvas) return;
+  const scanCanvas = workingCanvas;
+  const scanCtx = getCanvasContext(scanCanvas);
   const { data, width, height } = scanCtx.getImageData(0, 0, scanCanvas.width, scanCanvas.height);
   let minX = width;
   let minY = height;
@@ -142,7 +310,7 @@ const redrawResult = async (shouldCommit?: () => boolean) => {
   let maxY = -1;
   for (let y = 0; y < height; y += 1) {
     for (let x = 0; x < width; x += 1) {
-      if (data[(y * width + x) * 4 + 3] > 8) {
+      if (data[(y * width + x) * 4 + 3] > 10) {
         minX = Math.min(minX, x);
         minY = Math.min(minY, y);
         maxX = Math.max(maxX, x);
@@ -165,6 +333,7 @@ const redrawResult = async (shouldCommit?: () => boolean) => {
   const drawH = Math.round(cropH * scale);
   const dx = Math.round((size - drawW) / 2);
   const dy = Math.round((size - drawH) / 2);
+  renderFrame = { minX, minY, scale, dx, dy };
 
   const canvas = previewCanvasRef.value ?? document.createElement('canvas');
   canvas.width = size;
@@ -182,6 +351,7 @@ const redrawResult = async (shouldCommit?: () => boolean) => {
   ctx.drawImage(scanCanvas, minX, minY, cropW, cropH, dx, dy, drawW, drawH);
   ctx.restore();
 
+  if (!commit) return;
   const blob = await new Promise<Blob>((resolve, reject) => {
     canvas.toBlob((b) => b ? resolve(b) : reject(new Error('PNG export failed')), 'image/png');
   });
@@ -195,6 +365,153 @@ const redrawResult = async (shouldCommit?: () => boolean) => {
   outputBytes.value = blob.size;
 };
 
+const saveUndoState = () => {
+  if (!workingCanvas) return;
+  const snapshot = getCanvasContext(workingCanvas).getImageData(0, 0, workingCanvas.width, workingCanvas.height);
+  undoStack.push(snapshot);
+  if (undoStack.length > 8) undoStack.shift();
+  undoVersion.value = undoStack.length;
+};
+
+const undoEdit = async () => {
+  if (!workingCanvas || !undoStack.length) return;
+  const snapshot = undoStack.pop();
+  if (!snapshot) return;
+  undoVersion.value = undoStack.length;
+  getCanvasContext(workingCanvas).putImageData(snapshot, 0, 0);
+  await redrawResult();
+};
+
+const outputPointToSource = (event: PointerEvent) => {
+  const canvas = previewCanvasRef.value;
+  if (!canvas || !renderFrame || !workingCanvas) return null;
+  const rect = canvas.getBoundingClientRect();
+  const outputX = (event.clientX - rect.left) * (canvas.width / rect.width);
+  const outputY = (event.clientY - rect.top) * (canvas.height / rect.height);
+  const { minX, minY, scale, dx, dy } = renderFrame;
+  const x = Math.round((outputX - dx) / scale + minX);
+  const y = Math.round((outputY - dy) / scale + minY);
+  if (x < 0 || y < 0 || x >= workingCanvas.width || y >= workingCanvas.height) return null;
+  return { x, y };
+};
+
+const eraseWithMagicWand = (startX: number, startY: number) => {
+  if (!workingCanvas) return;
+  const ctx = getCanvasContext(workingCanvas);
+  const image = ctx.getImageData(0, 0, workingCanvas.width, workingCanvas.height);
+  const { data, width, height } = image;
+  const start = (startY * width + startX) * 4;
+  if (data[start + 3] === 0) return;
+
+  const toleranceSq = wandTolerance.value * wandTolerance.value * 3;
+  const visited = new Uint8Array(width * height);
+  const queue = new Int32Array(width * height);
+  let head = 0;
+  let tail = 0;
+  const startIndex = startY * width + startX;
+  queue[tail++] = startIndex;
+  visited[startIndex] = 1;
+
+  while (head < tail) {
+    const point = queue[head++];
+    const offset = point * 4;
+    if (data[offset + 3] === 0) continue;
+    data[offset + 3] = 0;
+
+    const x = point % width;
+    const y = Math.floor(point / width);
+    const neighbors = [point - 1, point + 1, point - width, point + width];
+    for (const next of neighbors) {
+      if (next < 0 || next >= width * height || visited[next]) continue;
+      if ((next === point - 1 && x === 0) || (next === point + 1 && x === width - 1) || (next === point - width && y === 0) || (next === point + width && y === height - 1)) continue;
+      const neighborOffset = next * 4;
+      const dr = data[neighborOffset] - data[offset];
+      const dg = data[neighborOffset + 1] - data[offset + 1];
+      const db = data[neighborOffset + 2] - data[offset + 2];
+      if (data[neighborOffset + 3] === 0 || dr * dr + dg * dg + db * db > toleranceSq) continue;
+      visited[next] = 1;
+      queue[tail++] = next;
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+};
+
+const paintStroke = (from: { x: number; y: number }, to: { x: number; y: number }) => {
+  if (!workingCanvas || !matteSourceCanvas) return;
+  const ctx = getCanvasContext(workingCanvas);
+  ctx.save();
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = brushSize.value;
+  ctx.beginPath();
+  ctx.moveTo(from.x, from.y);
+  ctx.lineTo(to.x, to.y);
+  if (editTool.value === 'erase') {
+    ctx.globalCompositeOperation = 'destination-out';
+    ctx.strokeStyle = '#000';
+    ctx.stroke();
+  } else {
+    ctx.beginPath();
+    ctx.arc(from.x, from.y, brushSize.value / 2, 0, Math.PI * 2);
+    ctx.arc(to.x, to.y, brushSize.value / 2, 0, Math.PI * 2);
+    ctx.clip();
+    ctx.drawImage(matteSourceCanvas, 0, 0);
+  }
+  ctx.restore();
+};
+
+const schedulePreview = () => {
+  if (previewFramePending) return;
+  previewFramePending = true;
+  requestAnimationFrame(() => {
+    previewFramePending = false;
+    void redrawResult(false);
+  });
+};
+
+const onPreviewPointerDown = (event: PointerEvent) => {
+  if (!canEdit.value) return;
+  const point = outputPointToSource(event);
+  if (!point) return;
+  if (editTool.value === 'wand') {
+    saveUndoState();
+    eraseWithMagicWand(point.x, point.y);
+    void redrawResult();
+    return;
+  }
+  saveUndoState();
+  isPainting = true;
+  previousBrushPoint = point;
+  previewCanvasRef.value?.setPointerCapture(event.pointerId);
+  paintStroke(point, point);
+  schedulePreview();
+};
+
+const onPreviewPointerMove = (event: PointerEvent) => {
+  if (!isPainting || !previousBrushPoint) return;
+  const point = outputPointToSource(event);
+  if (!point) return;
+  paintStroke(previousBrushPoint, point);
+  previousBrushPoint = point;
+  schedulePreview();
+};
+
+const finishPainting = async () => {
+  if (!isPainting) return;
+  isPainting = false;
+  previousBrushPoint = null;
+  await redrawResult();
+};
+
+const changeCleanupLevel = async (level: number) => {
+  if (!matteSourceCanvas || !workingCanvas || !canEdit.value) return;
+  if (level <= cleanupLevel.value) return;
+  cleanupLevel.value = level;
+  saveUndoState();
+  applySoftAlphaCleanup(workingCanvas);
+  await redrawResult();
+};
+
 const processImage = async () => {
   if (!originalFile.value || isRunning.value) return;
   stage.value = 'processing';
@@ -204,6 +521,23 @@ const processImage = async () => {
   const startedAt = performance.now();
 
   try {
+    if (isIconMode.value) {
+      progressText.value = 'Preserving icon artwork';
+      progressPct.value = 42;
+      const iconMetrics = await createIconWorkingCanvas(originalFile.value);
+      mattedBlob.value = originalFile.value;
+      progressText.value = 'Trimming outer canvas';
+      progressPct.value = 92;
+      await redrawResult();
+      elapsedMs.value = performance.now() - startedAt;
+      progressPct.value = 100;
+      progressText.value = 'Ready';
+      stage.value = 'done';
+      logger.info('system', `[matting][Icon] ${originalFile.value.name} | ${fileSizeStr(originalFile.value.size)} -> ${fileSizeStr(outputBytes.value)} | ${(elapsedMs.value / 1000).toFixed(2)}s | Engine: Edge-connected Canvas mask`);
+      logger.info('system', '[matting][IconMask]', iconMetrics);
+      return;
+    }
+
     const config: Config = {
       publicPath: `${window.location.origin}${import.meta.env.BASE_URL}background-removal/`,
       model: 'isnet_fp16',
@@ -228,6 +562,7 @@ const processImage = async () => {
     mattedBlob.value = await removeBackground(originalFile.value, config);
     progressText.value = 'Cropping transparent bounds';
     progressPct.value = 96;
+    await createWorkingCanvas(mattedBlob.value);
     await redrawResult();
     elapsedMs.value = performance.now() - startedAt;
     progressPct.value = 100;
@@ -246,7 +581,7 @@ watch([padding, outputSize, radius], async () => {
   if (!mattedBlob.value || stage.value !== 'done') return;
   const token = ++redrawToken;
   try {
-    await redrawResult(() => token === redrawToken);
+    await redrawResult(true, () => token === redrawToken);
   } catch (e) {
     if (token === redrawToken) errorMsg.value = e instanceof Error ? e.message : 'Canvas redraw failed';
   }
@@ -321,7 +656,15 @@ defineExpose({
             <span v-if="stage === 'done'" class="done-pill">{{ outputSize }}PX · {{ fileSizeStr(outputBytes) }}</span>
           </div>
           <div class="result-preview">
-            <canvas v-show="stage === 'done'" ref="previewCanvasRef"></canvas>
+            <canvas
+              v-show="stage === 'done'"
+              ref="previewCanvasRef"
+              :class="{ editable: canEdit, 'tool-wand': editTool === 'wand', 'tool-brush': editTool !== 'wand' }"
+              @pointerdown="onPreviewPointerDown"
+              @pointermove="onPreviewPointerMove"
+              @pointerup="finishPainting"
+              @pointercancel="finishPainting"
+            ></canvas>
             <div v-if="stage === 'ready'" class="ready-state">
               <p>图片已就绪</p>
               <span>点击开始后将在浏览器本地完成 AI 抠图。</span>
@@ -346,6 +689,19 @@ defineExpose({
             </button>
           </div>
 
+          <div class="mode-section">
+            <span>处理模式</span>
+            <div class="matting-mode-toggle">
+              <button :class="{ active: mattingMode === 'auto' }" :disabled="isRunning" title="自动识别人物与普通主体" @click="mattingMode = 'auto'">智能主体</button>
+              <button :class="{ active: mattingMode === 'icon' }" :disabled="isRunning" title="保留图标底板，仅移除外部画布" @click="mattingMode = 'icon'">图标 / Logo</button>
+            </div>
+          </div>
+
+          <div v-if="isIconMode" class="control-group icon-tolerance-control">
+            <label><span>外部背景容差</span><b>{{ iconEdgeTolerance }}</b></label>
+            <input v-model="iconEdgeTolerance" type="range" min="12" max="96" step="2" :disabled="isRunning" />
+          </div>
+
           <div class="control-group">
             <label><span>Padding</span><b>{{ padding }}%</b></label>
             <input v-model="padding" type="range" min="0" max="30" step="1" :disabled="isRunning" />
@@ -359,10 +715,46 @@ defineExpose({
             <input v-model="radius" type="range" min="0" :max="outputSize / 2" step="8" :disabled="isRunning" />
           </div>
 
+          <div class="edit-section" :class="{ disabled: !canEdit }">
+            <div class="edit-section-head">
+              <span>本地精修</span>
+              <button class="undo-btn" :disabled="!canUndo" title="撤销上一步" @click="undoEdit">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M9 7l-5 5 5 5M4 12h10a6 6 0 0 1 6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+            </div>
+            <div class="tool-row">
+              <button class="tool-btn" :class="{ active: editTool === 'wand' }" :disabled="!canEdit" title="点击清理相连背景" @click="editTool = 'wand'">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M15 4V2m0 12v-2M5 9H3m12 0h2M7.4 6.4 6 5m9 9-1.4-1.4M9 15v2m0-12V3m-3 6H4m12 0h-2M7.4 11.6 6 13m9-9-1.4 1.4" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="m9 9 6 6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
+                魔棒
+              </button>
+              <button class="tool-btn" :class="{ active: editTool === 'erase' }" :disabled="!canEdit" title="在预览中涂抹删除" @click="editTool = 'erase'">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="m7 16 9-9 4 4-9 9H7v-4Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="m13 5 2-2 4 4-2 2" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+                擦除
+              </button>
+              <button class="tool-btn" :class="{ active: editTool === 'restore' }" :disabled="!canEdit" title="恢复模型原始结果" @click="editTool = 'restore'">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M12 5v14M5 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+                恢复
+              </button>
+            </div>
+            <label class="mini-control"><span>魔棒容差</span><b>{{ wandTolerance }}</b></label>
+            <input class="mini-slider" v-model="wandTolerance" type="range" min="10" max="90" step="2" :disabled="!canEdit" />
+            <label class="mini-control"><span>笔刷大小</span><b>{{ brushSize }}px</b></label>
+            <input class="mini-slider" v-model="brushSize" type="range" min="12" max="140" step="2" :disabled="!canEdit" />
+          </div>
+
+          <div class="clean-section" :class="{ disabled: !canEdit }">
+            <span>边缘清理</span>
+            <div class="clean-levels">
+              <button v-for="level in [0, 1, 2]" :key="level" :class="{ active: cleanupLevel === level }" :disabled="!canEdit || level < cleanupLevel" @click="changeCleanupLevel(level)">
+                {{ ['保留', '平衡', '强'][level] }}
+              </button>
+            </div>
+          </div>
+
           <button class="primary-action" :disabled="!canProcess" @click="processImage">
             <svg v-if="!isRunning" width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h7l-1 8 10-13h-7l1-7z" fill="currentColor"/></svg>
             <svg v-else width="15" height="15" viewBox="0 0 24 24" fill="none" class="spinner"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="2" stroke-dasharray="28 56" stroke-linecap="round"/></svg>
-            {{ isRunning ? 'AI 抠图中' : stage === 'done' ? '重新抠图' : '开始智能抠图' }}
+            {{ isRunning ? (isIconMode ? '处理图标中' : 'AI 抠图中') : stage === 'done' ? '重新处理' : (isIconMode ? '提取图标' : '开始智能抠图') }}
           </button>
           <button class="download-action" :disabled="stage !== 'done'" @click="downloadResult">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -424,17 +816,47 @@ defineExpose({
 .done-pill { color: var(--c-success) !important; background: var(--c-success-subtle); border: 1px solid rgba(34,197,94,0.25); border-radius: var(--r-full); padding: 3px 8px; }
 .result-preview { flex: 1; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; padding: 24px; background-color: rgba(255,255,255,0.025); background-image: linear-gradient(45deg, rgba(255,255,255,0.07) 25%, transparent 25%), linear-gradient(-45deg, rgba(255,255,255,0.07) 25%, transparent 25%), linear-gradient(45deg, transparent 75%, rgba(255,255,255,0.07) 75%), linear-gradient(-45deg, transparent 75%, rgba(255,255,255,0.07) 75%); background-size: 28px 28px; background-position: 0 0, 0 14px, 14px -14px, -14px 0; }
 .result-preview canvas { width: min(100%, 620px); height: auto; max-height: 100%; aspect-ratio: 1; object-fit: contain; filter: drop-shadow(0 20px 40px rgba(0,0,0,0.32)); }
+.result-preview canvas.editable { touch-action: none; }
+.result-preview canvas.tool-wand { cursor: cell; }
+.result-preview canvas.tool-brush { cursor: crosshair; }
 .ready-state, .processing-state, .error-state { display: flex; flex-direction: column; align-items: center; gap: 10px; text-align: center; color: var(--c-text-secondary); }
 .ready-state p, .processing-state p, .error-state p { color: var(--c-text-primary); font-weight: 700; }
 .spinner { animation: mat-spin 1s linear infinite; color: var(--c-accent); }
 .progress-track { width: min(320px, 60vw); height: 5px; border-radius: var(--r-full); background: var(--c-bg-elevated); overflow: hidden; border: 1px solid var(--c-border); }
 .progress-track div { height: 100%; background: var(--c-accent); border-radius: inherit; transition: width var(--dur-normal) var(--ease-out); }
-.control-panel { padding-bottom: 16px; }
+.control-panel { padding-bottom: 16px; overflow-y: auto; }
+.mode-section { display: flex; flex-direction: column; gap: 9px; padding: 16px 18px 2px; }
+.mode-section > span { color: var(--c-text-secondary); font-size: 0.78rem; font-weight: 700; }
+.matting-mode-toggle { display: grid; grid-template-columns: 1fr 1fr; gap: 3px; padding: 3px; border: 1px solid var(--c-border); border-radius: 8px; background: var(--c-bg-elevated); }
+.matting-mode-toggle button { min-height: 31px; border: 0; border-radius: 5px; background: transparent; color: var(--c-text-muted); font-size: 0.68rem; font-weight: 750; cursor: pointer; transition: color var(--dur-fast), background var(--dur-fast); }
+.matting-mode-toggle button:hover:not(:disabled) { color: var(--c-text-primary); }
+.matting-mode-toggle button.active { color: var(--c-accent); background: var(--c-accent-subtle); box-shadow: inset 0 0 0 1px var(--c-border-accent); }
+.matting-mode-toggle button:disabled { opacity: 0.45; cursor: not-allowed; }
+.icon-tolerance-control { padding-top: 10px; }
 .control-group { display: flex; flex-direction: column; gap: 10px; padding: 16px 18px 4px; }
 .control-group label { display: flex; justify-content: space-between; align-items: center; font-size: 0.78rem; color: var(--c-text-secondary); font-weight: 700; }
 .control-group b { font-family: 'JetBrains Mono', monospace; color: var(--c-text-accent); font-size: 0.72rem; }
 .control-group input { width: 100%; height: 4px; appearance: none; border-radius: var(--r-full); background: var(--c-bg-elevated); }
 .control-group input::-webkit-slider-thumb { appearance: none; width: 17px; height: 17px; border-radius: 50%; background: var(--c-accent); box-shadow: var(--shadow-glow-sm); }
+.edit-section, .clean-section { margin: 14px 18px 0; padding: 12px; border: 1px solid var(--c-border); border-radius: 8px; background: color-mix(in srgb, var(--c-bg-overlay) 74%, transparent); }
+.edit-section.disabled, .clean-section.disabled { opacity: 0.52; }
+.edit-section-head, .clean-section { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.edit-section-head > span, .clean-section > span { color: var(--c-text-secondary); font-family: 'JetBrains Mono', monospace; font-size: 0.64rem; font-weight: 800; letter-spacing: 0.08em; }
+.undo-btn { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--c-border); border-radius: 6px; color: var(--c-text-muted); background: var(--c-bg-elevated); cursor: pointer; }
+.undo-btn:hover:not(:disabled) { color: var(--c-accent); border-color: var(--c-border-accent); }
+.undo-btn:disabled, .tool-btn:disabled, .clean-levels button:disabled { cursor: not-allowed; }
+.tool-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 5px; margin: 10px 0 12px; }
+.tool-btn { min-width: 0; min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; padding: 5px 3px; border: 1px solid var(--c-border); border-radius: 6px; background: var(--c-bg-elevated); color: var(--c-text-muted); font-size: 0.66rem; font-weight: 700; cursor: pointer; transition: color var(--dur-fast), background var(--dur-fast), border-color var(--dur-fast); }
+.tool-btn:hover:not(:disabled) { color: var(--c-text-primary); border-color: var(--c-border-strong); }
+.tool-btn.active { color: var(--c-accent); background: var(--c-accent-subtle); border-color: var(--c-border-accent); }
+.mini-control { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; color: var(--c-text-muted); font-size: 0.68rem; font-weight: 700; }
+.mini-control b { color: var(--c-text-accent); font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; }
+.mini-slider { width: 100%; height: 3px; margin-top: 7px; appearance: none; border-radius: var(--r-full); background: var(--c-bg-elevated); }
+.mini-slider::-webkit-slider-thumb { width: 13px; height: 13px; appearance: none; border-radius: 50%; background: var(--c-accent); box-shadow: var(--shadow-glow-sm); }
+.clean-section { padding: 10px 12px; }
+.clean-levels { display: inline-flex; gap: 2px; padding: 2px; border: 1px solid var(--c-border); border-radius: 6px; background: var(--c-bg-elevated); }
+.clean-levels button { padding: 4px 7px; border: 0; border-radius: 4px; background: transparent; color: var(--c-text-muted); font-size: 0.62rem; font-weight: 700; cursor: pointer; }
+.clean-levels button.active { background: var(--c-accent-subtle); color: var(--c-text-accent); }
 .primary-action, .download-action { width: calc(100% - 36px); margin: 18px 18px 0; min-height: 42px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: 0.84rem; font-weight: 800; transition: all var(--dur-normal) var(--ease-out); }
 .primary-action { color: #fff; background: var(--c-accent); box-shadow: var(--shadow-glow-sm); }
 .download-action { color: var(--c-success); background: var(--c-success-subtle); border: 1px solid rgba(34,197,94,0.28); }

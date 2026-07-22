@@ -127,7 +127,7 @@ onUnmounted(() => {
 
         <div class="hdr-divider"></div>
 
-        <button v-if="showLoggerEnabled" class="hdr-icon-btn" :class="{ active: showLogger }" @click="openDiagnosticLogs" :title="t('nav.diagnostic')">
+        <button class="hdr-icon-btn" :class="{ active: showLogger }" @click="openDiagnosticLogs" :title="t('nav.diagnostic')">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none"><path d="M4 17l6-6-6-6m8 14h8" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
         </button>
         <button class="hdr-icon-btn" @click="openSettings" :title="t('nav.settings')" :class="{ active: showSettings }">

@@ -43,9 +43,11 @@ onMounted(() => {
 
 const copyLog = (log: any) => {
   const time = new Date(log.timestamp).toISOString().split('T')[1].replace('Z', '');
-  const text = `[${time}] [${log.level.toUpperCase()}] [${log.category}] ${log.message}`;
+  const text = `[${time}] [${log.level.toUpperCase()}] [${log.category}] ${formatLog(log)}`;
   navigator.clipboard.writeText(text);
 };
+
+const formatLog = (log: any) => `${log.message}${log.data ? ` ${JSON.stringify(log.data)}` : ''}`;
 
 </script>
 
@@ -77,7 +79,7 @@ const copyLog = (log: any) => {
         <div v-for="(log, idx) in filteredLogs" :key="idx" class="log-row" :class="log.level" @click="copyLog(log)" title="Click to copy">
           <span class="log-time">{{ new Date(log.timestamp).toISOString().split('T')[1].slice(0,-1) }}</span>
           <span class="log-cat">[{{ log.category }}]</span>
-          <span class="log-msg">{{ log.message }}</span>
+          <span class="log-msg">{{ formatLog(log) }}</span>
           <span class="log-copy-hint">{{ t('console.copy') }}</span>
         </div>
       </div>
