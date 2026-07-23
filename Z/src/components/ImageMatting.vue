@@ -33,6 +33,7 @@ const fileInputRef = ref<HTMLInputElement | null>(null);
 const previewCanvasRef = ref<HTMLCanvasElement | null>(null);
 const stage = ref<MattingStage>('empty');
 const isDragging = ref(false);
+const dragDepth = ref(0);
 const originalFile = ref<File | null>(null);
 const originalUrl = ref('');
 const mattedBlob = ref<Blob | null>(null);
@@ -126,19 +127,38 @@ const onFileInput = (e: Event) => {
   (e.target as HTMLInputElement).value = '';
 };
 
+const hasDraggedFiles = (e: DragEvent) => Array.from(e.dataTransfer?.types ?? []).includes('Files');
+
 const onDrop = (e: DragEvent) => {
   e.preventDefault();
+  dragDepth.value = 0;
   isDragging.value = false;
   const file = e.dataTransfer?.files?.[0];
   if (file) loadFile(file);
 };
 
-const onDragOver = (e: DragEvent) => {
+const onDragEnter = (e: DragEvent) => {
+  if (!hasDraggedFiles(e)) return;
   e.preventDefault();
+  dragDepth.value += 1;
   isDragging.value = true;
 };
 
-const onDragLeave = () => {
+const onDragOver = (e: DragEvent) => {
+  if (!hasDraggedFiles(e)) return;
+  e.preventDefault();
+  if (e.dataTransfer) e.dataTransfer.dropEffect = 'copy';
+  isDragging.value = true;
+};
+
+const onDragLeave = (e: DragEvent) => {
+  if (!hasDraggedFiles(e)) return;
+  dragDepth.value = Math.max(0, dragDepth.value - 1);
+  if (dragDepth.value === 0) isDragging.value = false;
+};
+
+const onDragEnd = () => {
+  dragDepth.value = 0;
   isDragging.value = false;
 };
 
@@ -613,7 +633,7 @@ defineExpose({
 </script>
 
 <template>
-  <div class="compressor-root matting-root" @dragover="onDragOver" @dragleave="onDragLeave" @drop="onDrop">
+  <div class="compressor-root matting-root" @dragenter="onDragEnter" @dragover="onDragOver" @dragleave="onDragLeave" @dragend="onDragEnd" @drop="onDrop">
     <input ref="fileInputRef" type="file" accept="image/png,image/jpeg,image/webp,image/avif,image/gif,image/bmp" hidden @change="onFileInput" />
 
     <section class="matting-stage" :class="{ dragging: isDragging, empty: stage === 'empty' }">
@@ -862,7 +882,7 @@ defineExpose({
 .download-action { color: var(--c-success); background: var(--c-success-subtle); border: 1px solid rgba(34,197,94,0.28); }
 .primary-action:hover:not(:disabled), .download-action:hover:not(:disabled) { transform: translateY(-1px); }
 .primary-action:disabled, .download-action:disabled { opacity: 0.42; cursor: not-allowed; transform: none; box-shadow: none; }
-.drop-overlay { position: absolute; inset: 18px; z-index: 4; border: 1px dashed var(--c-border-accent); border-radius: 22px; display: flex; align-items: center; justify-content: center; background: rgba(249,115,22,0.12); color: var(--c-text-accent); font-weight: 800; backdrop-filter: blur(10px); }
+.drop-overlay { position: absolute; inset: 18px; z-index: 4; display: flex; align-items: center; justify-content: center; border: 1px dashed var(--c-border-accent); border-radius: 22px; background: rgba(249,115,22,0.12); color: var(--c-text-accent); font-weight: 800; pointer-events: none; backdrop-filter: blur(10px); }
 .settings-panel.mini { width: min(360px, 92vw); }
 @keyframes mat-spin { to { transform: rotate(360deg); } }
 @media (max-width: 1020px) {
