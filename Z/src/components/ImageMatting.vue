@@ -642,7 +642,9 @@ defineExpose({
       <div v-if="stage === 'empty'" class="drop-card" @click="fileInputRef?.click()">
         <div class="matting-orbit">
           <svg width="42" height="42" viewBox="0 0 24 24" fill="none">
-            <path d="M4 19c5.2-.8 7.1-4.2 8-11 1 6.8 2.8 10.2 8 11M7 5h10M12 2.5V7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>
+            <path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.21 1.21 0 0 0 1.72 0L21.64 5.36a1.21 1.21 0 0 0 0-1.72Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            <path d="m14 7 3 3" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/>
+            <path d="M5 6v4M19 14v4M10 2v2M7 8H3M21 16h-4M11 3H9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
           </svg>
         </div>
         <p class="eyebrow">LOCAL AI CUTOUT</p>

@@ -119,7 +119,7 @@ onUnmounted(() => {
             <span v-if="mode !== 'image' && imageBadge > 0" class="mode-badge">{{ imageBadge }}</span>
           </button>
           <button class="mode-pill" role="tab" :aria-selected="mode === 'matting'" :class="{ active: mode === 'matting' }" @click="setMode('matting')">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="M4 19c5-1 7-4 8-9 1 5 3 8 8 9M8 5h8M12 3v4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none"><path d="m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.21 1.21 0 0 0 1.72 0L21.64 5.36a1.21 1.21 0 0 0 0-1.72Z" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="m14 7 3 3" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M5 6v4M19 14v4M10 2v2M7 8H3M21 16h-4M11 3H9" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
             <span>{{ t('mode.matting') }}</span>
             <span v-if="mode !== 'matting' && mattingBadge > 0" class="mode-badge">{{ mattingBadge }}</span>
           </button>
